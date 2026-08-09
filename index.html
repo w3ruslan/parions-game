@@ -179,8 +179,10 @@
       <div class="note">Her maçın kendi <b>▶ Oyna</b> düğmesi var — bir maçı oynayınca sonucu ve kasan anında güncellenir, sonraki maça ona göre karar verirsin. <b>⊘ Pas geç</b> (veya 0 yazıp Oyna) o maçı hesaba katmaz.</div>
       <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
         <button class="b-main hidden" id="btnNext" style="flex:2;min-width:200px" onclick="nextWeek()">Sonraki hafta →</button>
+        <button style="flex:1;min-width:150px" onclick="copyReport()">📋 Sonuçları kopyala</button>
         <button style="flex:1;min-width:120px" onclick="if(confirm('Oyun sıfırlansın mı?'))resetGame()">↺ Yeniden başla</button>
       </div>
+      <div class="note" id="copyNote"></div>
     </div>
 
     <div class="card">
@@ -443,6 +445,66 @@ function renderHist(){
     <span>Hafta ${g.h}</span><span style="color:var(--muted)">${fmt(g.yat)} €</span>
     <span style="color:${g.net>=0?'var(--green)':'var(--red)'};font-weight:700">${money(g.net)}</span>
     <span>${fmt(g.kasa)} €</span></div>`).join('');
+}
+
+// --- SONUÇ RAPORU (kopyala) ---
+function buildReport(){
+  let k=kasaBas, yatT=0, donT=0, oyn=0, pas=0, tut=0;
+  let kayipSeri=0, enUzunKayip=0, tepe=kasaBas, enBuyukDusus=0;
+  const sat=[];
+  weeks.forEach((w,wIdx)=>{
+    w.forEach(m=>{
+      if(!m.done) return;
+      if(m.done==='pass'){ pas++; sat.push(`H${wIdx+1} | ${m.h} ${m.sc} ${m.a} | sonuc ${m.r} | PAS`); return; }
+      const idx = m.r==='1'?0:(m.r==='X'?1:2);
+      const bu=m.stake.reduce((a,b)=>a+b,0);
+      const donen=m.stake[idx]*m.od[idx];
+      const net=donen-bu;
+      k+=net; yatT+=bu; donT+=donen; oyn++;
+      const kazandi = m.stake[idx]>0;
+      if(kazandi){ tut++; kayipSeri=0; } else { kayipSeri++; if(kayipSeri>enUzunKayip) enUzunKayip=kayipSeri; }
+      if(k>tepe) tepe=k;
+      if(tepe-k>enBuyukDusus) enBuyukDusus=tepe-k;
+      const bahis=[0,1,2].filter(x=>m.stake[x]>0)
+        .map(x=>`${['1','X','2'][x]}:${m.stake[x]}@${m.od[x].toFixed(2)}`).join(' ');
+      sat.push(`H${wIdx+1} | ${m.h} ${m.sc} ${m.a} | sonuc ${m.r} | ${bahis} | donen ${donen.toFixed(2)} | net ${net>=0?'+':''}${net.toFixed(2)} | kasa ${k.toFixed(2)}`);
+    });
+  });
+  const kz=k-kasaBas;
+  const roi = yatT>0 ? (kz/yatT*100) : 0;
+  const isabet = oyn>0 ? (tut/oyn*100) : 0;
+  const bas=[
+    `=== PARIONS GAME — SONUC RAPORU ===`,
+    `Baslangic kasasi : ${kasaBas.toFixed(2)} EUR`,
+    `Son kasa         : ${k.toFixed(2)} EUR`,
+    `Toplam K/Z       : ${kz>=0?'+':''}${kz.toFixed(2)} EUR`,
+    `Toplam yatirilan : ${yatT.toFixed(2)} EUR`,
+    `Toplam donen     : ${donT.toFixed(2)} EUR`,
+    `ROI              : %${roi.toFixed(2)}`,
+    `Oynanan mac      : ${oyn}   (pas gecilen: ${pas})`,
+    `Tutan            : ${tut} / ${oyn}  (%${isabet.toFixed(1)})`,
+    `En uzun kayip serisi : ${enUzunKayip} mac`,
+    `En buyuk dusus (drawdown) : ${enBuyukDusus.toFixed(2)} EUR`,
+    `Oynanan hafta    : ${weeks.filter(w=>w.some(m=>m.done)).length} / ${weeks.length}`,
+    ``,
+    `--- MAC MAC ---`
+  ];
+  return bas.concat(sat).join('\n');
+}
+function copyReport(){
+  const t=buildReport();
+  const note=document.getElementById('copyNote');
+  const ta=document.createElement('textarea'); ta.value=t;
+  ta.style.position='fixed'; ta.style.left='-9999px'; document.body.appendChild(ta);
+  ta.select();
+  let ok=false; try{ ok=document.execCommand('copy'); }catch(e){}
+  document.body.removeChild(ta);
+  if(navigator.clipboard) navigator.clipboard.writeText(t).catch(()=>{});
+  const n=t.split('\n').length-15;
+  note.innerHTML = ok||navigator.clipboard
+    ? `✅ Rapor panoya kopyalandı (${n} maç). Yapıştırıp gönderebilirsin.`
+    : `⚠️ Kopyalanamadı. Konsoldan alabilirsin.`;
+  setTimeout(()=>{ note.innerHTML=''; }, 6000);
 }
 
 function resetGame(){
