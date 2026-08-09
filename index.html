@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parions Game</title>
+<style>
+  :root{
+    --bg:#0f1420; --card:#1a2233; --card2:#131a2b; --line:#2a3550;
+    --ink:#eaf0fb; --muted:#94a2bd; --accent:#6d86f0; --accent2:#5670e0;
+    --green:#22c55e; --green-bg:rgba(34,197,94,.13);
+    --red:#ff6b6b;  --red-bg:rgba(255,107,107,.11);
+    --amber:#f5b942; --amber-bg:rgba(245,185,66,.14);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;padding:18px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:radial-gradient(1100px 520px at 50% -220px,rgba(109,134,240,.18),transparent),var(--bg);
+    color:var(--ink);line-height:1.45}
+  .wrap{max-width:1180px;margin:0 auto}
+  header{text-align:center;margin-bottom:16px}
+  header h1{font-size:22px;font-weight:700;margin:0;letter-spacing:.2px}
+  header p{margin:5px 0 0;color:var(--muted);font-size:13px}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px}
+  .lbl{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.6px;margin-bottom:7px;display:block}
+  textarea{width:100%;height:160px;background:var(--card2);border:1px solid var(--line);color:var(--ink);
+    border-radius:12px;padding:11px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;resize:vertical}
+  input,select{background:var(--card2);border:1px solid var(--line);color:var(--ink);border-radius:10px;
+    padding:9px 10px;font-family:inherit;font-size:13px;width:100%}
+  textarea:focus,input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(109,134,240,.16)}
+  button{cursor:pointer;font-family:inherit;font-weight:700;border-radius:12px;border:1px solid var(--line);
+    background:var(--card2);color:var(--ink);padding:11px 16px;font-size:13px;transition:.15s}
+  button:hover{background:#22304d;border-color:var(--accent)}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  .b-main{background:var(--accent);color:#0f1420;border-color:var(--accent);width:100%;padding:14px;font-size:15px;
+    box-shadow:0 4px 14px rgba(109,134,240,.35)}
+  .b-main:hover{background:var(--accent2);border-color:var(--accent2)}
+  .b-go{background:var(--green);color:#052e16;border-color:var(--green);box-shadow:0 4px 14px rgba(34,197,94,.3)}
+  .b-go:hover{background:#16a34a;border-color:#16a34a}
+  .setup{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:12px}
+  .hidden{display:none!important}
+
+  /* ÜST BAR */
+  .hud{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+  .hstat{flex:1;min-width:120px;background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:11px 13px;text-align:center}
+  .hstat .k{color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.5px}
+  .hstat .v{font-size:21px;font-weight:700;margin-top:3px}
+  .hstat .v.pos{color:var(--green)} .hstat .v.neg{color:var(--red)} .hstat .v.acc{color:var(--accent)}
+
+  .weekbar{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+  .weektitle{font-size:16px;font-weight:700}
+  .quick{display:flex;align-items:center;gap:6px;margin-left:auto;flex-wrap:wrap}
+  .quick input{width:78px;text-align:center;padding:7px}
+  .quick button{padding:7px 12px;font-size:12px}
+
+  /* MAÇ SATIRLARI */
+  .head-row,.mrow{display:grid;grid-template-columns:minmax(190px,1fr) 108px 108px 108px 96px;gap:9px;align-items:center}
+  .head-row{padding:0 10px 7px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.6px;
+    border-bottom:1px solid var(--line)}
+  .mrow{padding:8px 10px;border-bottom:1px solid rgba(42,53,80,.55);font-size:13px}
+  .mrow.win{background:var(--green-bg)} .mrow.loss{background:var(--red-bg)} .mrow.none{opacity:.62}
+  .teams{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+  .sc{display:inline-block;background:var(--card2);border:1px solid var(--line);border-radius:6px;
+    padding:0 6px;margin:0 6px;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;font-weight:700}
+  .sc.q{color:var(--muted)}
+
+  .cellbox{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:5px 6px;text-align:center}
+  .cellbox .od{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--muted);margin-bottom:3px}
+  .cellbox input{padding:6px 4px;font-size:13px;text-align:center;font-weight:700}
+  .cellbox.hit{border-color:var(--green);background:rgba(34,197,94,.16)}
+  .cellbox.hit .od{color:var(--green);font-weight:700}
+  .cellbox.miss{opacity:.45}
+  .pl{text-align:right;font-weight:800;font-size:14px;white-space:nowrap}
+  .pl.pos{color:var(--green)} .pl.neg{color:var(--red)} .pl.zero{color:var(--muted)}
+
+  .weeksum{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+  .wsum{flex:1;min-width:110px;background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center}
+  .wsum .k{color:var(--muted);font-size:10px;text-transform:uppercase}
+  .wsum .v{font-size:17px;font-weight:700;margin-top:2px}
+  .wsum .v.pos{color:var(--green)} .wsum .v.neg{color:var(--red)}
+
+  .hist{margin-top:14px;max-height:220px;overflow-y:auto}
+  .hrow{display:grid;grid-template-columns:70px 1fr 90px 90px;gap:8px;padding:6px 10px;font-size:12px;
+    border-bottom:1px solid rgba(42,53,80,.5)}
+  .hrow.head{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-color:var(--line)}
+  .empty{text-align:center;color:var(--muted);padding:24px;font-size:13px}
+  .note{color:var(--muted);font-size:11.5px;margin-top:8px}
+  ::-webkit-scrollbar{width:7px}::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:var(--line);border-radius:7px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>🎮 Parions <span style="color:var(--accent)">Game</span></h1>
+    <p>Geçmiş maçları sonuçlarını görmeden oyna — gerçek karar, gerçek sonuç</p>
+  </header>
+
+  <!-- KURULUM -->
+  <div class="card" id="setup">
+    <span class="lbl">Geçmiş maçlar (skorlu)</span>
+    <textarea id="dataInput" placeholder="Skorlu geçmiş maçları buraya yapıştırın…&#10;Örnek:&#10;Galatasaray - Fenerbahce 2:1 2.10 3.40 3.20&#10;&#10;Haftaları boş satırla ayırabilirsiniz."></textarea>
+    <div class="setup">
+      <div>
+        <span class="lbl">Başlangıç kasası €</span>
+        <input type="number" id="kasa" value="1000" step="50">
+      </div>
+      <div>
+        <span class="lbl">Maç / hafta</span>
+        <input type="number" id="perWeek" value="9" min="1" max="30">
+      </div>
+      <div>
+        <span class="lbl">Hafta ayrımı</span>
+        <select id="weekMode">
+          <option value="auto">Boş satır varsa ona göre</option>
+          <option value="count">Hep maç sayısına göre</option>
+        </select>
+      </div>
+    </div>
+    <button class="b-main" style="margin-top:14px" onclick="startGame()">🎮 Oyunu başlat</button>
+    <div class="note">Maçlar sırayla oynanır. Skorlar <b>sen onaylayana kadar gizli</b> kalır.</div>
+  </div>
+
+  <!-- OYUN -->
+  <div id="game" class="hidden">
+    <div class="hud">
+      <div class="hstat"><div class="k">Kasa</div><div class="v acc" id="hKasa">—</div></div>
+      <div class="hstat"><div class="k">Toplam K/Z</div><div class="v" id="hKZ">—</div></div>
+      <div class="hstat"><div class="k">Yatırılan</div><div class="v" id="hYat">—</div></div>
+      <div class="hstat"><div class="k">Hafta</div><div class="v" id="hHafta">—</div></div>
+    </div>
+
+    <div class="card">
+      <div class="weekbar">
+        <span class="weektitle" id="weekTitle">Hafta 1</span>
+        <span class="quick">
+          <span class="lbl" style="margin:0">Hepsine:</span>
+          <input type="number" id="qAmount" value="10" step="1" placeholder="€">
+          <button onclick="quickFill(0)">1</button>
+          <button onclick="quickFill(1)">X</button>
+          <button onclick="quickFill(2)">2</button>
+          <button onclick="quickClear()">↺ temizle</button>
+        </span>
+      </div>
+
+      <div class="head-row">
+        <span>Maç</span><span style="text-align:center">1</span><span style="text-align:center">X</span>
+        <span style="text-align:center">2</span><span style="text-align:right">K/Z</span>
+      </div>
+      <div id="matchList"></div>
+
+      <div id="weekSum" class="weeksum hidden"></div>
+
+      <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+        <button class="b-main b-go" id="btnReveal" style="flex:2;min-width:200px" onclick="reveal()">✅ Onayla ve sonuçları göster</button>
+        <button class="b-main hidden" id="btnNext" style="flex:2;min-width:200px" onclick="nextWeek()">Sonraki hafta →</button>
+        <button style="flex:1;min-width:120px" onclick="if(confirm('Oyun sıfırlansın mı?'))resetGame()">↺ Yeniden başla</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <span class="lbl">📜 Hafta geçmişi</span>
+      <div class="hist">
+        <div class="hrow head"><span>Hafta</span><span>Bahis</span><span>K/Z</span><span>Kasa</span></div>
+        <div id="histList"><div class="empty">Henüz hafta tamamlanmadı.</div></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const LS='parionsGame';
+let weeks=[], wi=0, kasa=0, kasaBas=0, toplamYat=0, gecmis=[], acildi=false;
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function fmt(n){ return (Math.round(n*100)/100).toFixed(2).replace('.',',').replace(/,00$/,''); }
+function money(n){ return (n>0?'+':'')+fmt(n)+' €'; }
+
+function ultraClean(t){
+  if(!t) return "";
+  return t.replace(/Today|Yesterday|Round|B's|1X2/g,'')
+          .replace(/\d{2}\.\d{2}\.\s\d{2}:\d{2}/g,'').replace(/^\.|\.$/g,'')
+          .replace(/\s+/g,' ').trim();
+}
+const RX=/^(?:.*?\d{2}:\d{2}\s+)?(.+?)\s+-\s+(.+?)\s+(\d{1,2}\s*:\s*\d{1,2})\s+(?:(\d{1,2})\s+)?(\d+\.\d+)\s+(\d+\.\d+)\s+(\d+\.\d+)/;
+
+function parseAll(raw, mode, per){
+  const bloklar = raw.split(/\n\s*\n/);           // boş satır = hafta ayrımı
+  const kullanBlok = (mode==='auto' && bloklar.filter(b=>b.trim()).length>1);
+  const hepsi=[], bloklu=[];
+  (kullanBlok?bloklar:[raw]).forEach(blok=>{
+    const bu=[];
+    blok.split(/\r?\n/).forEach(line=>{
+      const s=line.trim(); if(!s) return;
+      const m=s.match(RX); if(!m) return;
+      const h=ultraClean(m[1]), a=ultraClean(m[2]);
+      const sc=m[3].replace(/\s+/g,'');
+      const o=[parseFloat(m[5]),parseFloat(m[6]),parseFloat(m[7])];
+      if(!h||!a||isNaN(o[0])) return;
+      const p=sc.split(':'), hg=parseInt(p[0]), ag=parseInt(p[1]);
+      if(isNaN(hg)||isNaN(ag)) return;
+      const r = hg===ag ? 'X' : (hg>ag ? '1' : '2');
+      const mac={h,a,sc,od:o,r,stake:[0,0,0]};
+      bu.push(mac); hepsi.push(mac);
+    });
+    if(bu.length) bloklu.push(bu);
+  });
+  if(kullanBlok) return bloklu;
+  const out=[];
+  for(let i=0;i<hepsi.length;i+=per) out.push(hepsi.slice(i,i+per));
+  return out;
+}
+
+function startGame(){
+  const raw=document.getElementById('dataInput').value;
+  const per=Math.max(1,parseInt(document.getElementById('perWeek').value)||9);
+  const mode=document.getElementById('weekMode').value;
+  weeks=parseAll(raw,mode,per);
+  if(weeks.length===0){ alert("Skorlu maç bulunamadı.\n\nSatır örneği:\nGalatasaray - Fenerbahce 2:1 2.10 3.40 3.20"); return; }
+  kasaBas=parseFloat(document.getElementById('kasa').value)||1000;
+  kasa=kasaBas; wi=0; toplamYat=0; gecmis=[]; acildi=false;
+  document.getElementById('setup').classList.add('hidden');
+  document.getElementById('game').classList.remove('hidden');
+  renderWeek(); renderHist(); saveState();
+}
+
+function renderWeek(){
+  const w=weeks[wi]; acildi=false;
+  document.getElementById('weekTitle').textContent=`Hafta ${wi+1} / ${weeks.length}`;
+  document.getElementById('btnReveal').classList.remove('hidden');
+  document.getElementById('btnNext').classList.add('hidden');
+  document.getElementById('weekSum').classList.add('hidden');
+  const box=document.getElementById('matchList');
+  box.innerHTML=w.map((m,i)=>{
+    const cell=(k)=>`<div class="cellbox" id="c${i}_${k}">
+        <div class="od">${m.od[k].toFixed(2)}</div>
+        <input type="number" id="st${i}_${k}" min="0" step="1" placeholder="€" value="${m.stake[k]||''}" oninput="onStake(${i},${k},this.value)">
+      </div>`;
+    return `<div class="mrow" id="row${i}">
+      <span class="teams">${esc(m.h)}<span class="sc q">? : ?</span>${esc(m.a)}</span>
+      ${cell(0)}${cell(1)}${cell(2)}
+      <span class="pl zero" id="pl${i}">—</span>
+    </div>`;
+  }).join('');
+  updateHud();
+}
+
+function onStake(i,k,v){ weeks[wi][i].stake[k]=parseFloat(v)||0; updateHud(); saveState(); }
+function quickFill(k){
+  const a=parseFloat(document.getElementById('qAmount').value)||0;
+  weeks[wi].forEach((m,i)=>{ m.stake[k]=a; const el=document.getElementById(`st${i}_${k}`); if(el) el.value=a||''; });
+  updateHud(); saveState();
+}
+function quickClear(){
+  weeks[wi].forEach((m,i)=>{ m.stake=[0,0,0]; [0,1,2].forEach(k=>{const el=document.getElementById(`st${i}_${k}`); if(el) el.value='';}); });
+  updateHud(); saveState();
+}
+function haftaYatirim(){ return weeks[wi].reduce((s,m)=>s+m.stake.reduce((a,b)=>a+b,0),0); }
+
+function updateHud(){
+  document.getElementById('hKasa').textContent=fmt(kasa)+' €';
+  const kz=kasa-kasaBas;
+  const e=document.getElementById('hKZ'); e.textContent=money(kz);
+  e.className='v '+(kz>0?'pos':(kz<0?'neg':''));
+  document.getElementById('hYat').textContent=fmt(toplamYat)+' €';
+  document.getElementById('hHafta').textContent=(wi+1)+' / '+weeks.length;
+}
+
+function reveal(){
+  if(acildi) return;
+  const w=weeks[wi];
+  const yat=haftaYatirim();
+  if(yat<=0 && !confirm("Bu hafta hiç bahis koymadın. Yine de sonuçları görmek istiyor musun?")) return;
+  if(yat>kasa && !confirm(`Yatırım (${fmt(yat)} €) kasadan (${fmt(kasa)} €) fazla. Devam edilsin mi?`)) return;
+
+  acildi=true;
+  let donen=0;
+  w.forEach((m,i)=>{
+    const idx = m.r==='1'?0:(m.r==='X'?1:2);
+    const bu = m.stake.reduce((a,b)=>a+b,0);
+    const kaz = m.stake[idx]*m.od[idx];
+    donen += kaz;
+    const net = kaz-bu;
+    // skor + sonuç göster
+    const row=document.getElementById('row'+i);
+    row.querySelector('.teams').innerHTML=`${esc(m.h)}<span class="sc">${esc(m.sc)}</span>${esc(m.a)}`;
+    [0,1,2].forEach(k=>{
+      const c=document.getElementById(`c${i}_${k}`);
+      c.classList.add(k===idx?'hit':'miss');
+      const inp=document.getElementById(`st${i}_${k}`); if(inp) inp.disabled=true;
+    });
+    const pl=document.getElementById('pl'+i);
+    if(bu<=0){ pl.textContent='—'; pl.className='pl zero'; row.classList.add('none'); }
+    else { pl.textContent=money(net); pl.className='pl '+(net>=0?'pos':'neg'); row.classList.add(net>=0?'win':'loss'); }
+  });
+
+  const net=donen-yat;
+  kasa+=net; toplamYat+=yat;
+  gecmis.push({h:wi+1, yat, net, kasa});
+
+  const s=document.getElementById('weekSum');
+  const isabet=w.filter(m=>m.stake[m.r==='1'?0:(m.r==='X'?1:2)]>0).length;
+  const oynanan=w.filter(m=>m.stake.reduce((a,b)=>a+b,0)>0).length;
+  s.innerHTML=`
+    <div class="wsum"><div class="k">Yatırılan</div><div class="v">${fmt(yat)} €</div></div>
+    <div class="wsum"><div class="k">Dönen</div><div class="v">${fmt(donen)} €</div></div>
+    <div class="wsum"><div class="k">Hafta K/Z</div><div class="v ${net>=0?'pos':'neg'}">${money(net)}</div></div>
+    <div class="wsum"><div class="k">Tutan</div><div class="v">${isabet} / ${oynanan}</div></div>
+    <div class="wsum"><div class="k">Yeni kasa</div><div class="v">${fmt(kasa)} €</div></div>`;
+  s.classList.remove('hidden');
+
+  document.getElementById('btnReveal').classList.add('hidden');
+  document.getElementById('btnNext').classList.remove('hidden');
+  document.getElementById('btnNext').textContent = (wi+1<weeks.length) ? 'Sonraki hafta →' : '🏁 Oyunu bitir';
+  updateHud(); renderHist(); saveState();
+}
+
+function nextWeek(){
+  if(wi+1<weeks.length){ wi++; renderWeek(); saveState(); window.scrollTo({top:0,behavior:'smooth'}); }
+  else finish();
+}
+
+function finish(){
+  const kz=kasa-kasaBas;
+  const roi = toplamYat>0 ? (kz/toplamYat*100) : 0;
+  const iyi = gecmis.reduce((a,b)=>b.net>a.net?b:a, gecmis[0]||{h:'-',net:0});
+  const kotu= gecmis.reduce((a,b)=>b.net<a.net?b:a, gecmis[0]||{h:'-',net:0});
+  document.getElementById('matchList').innerHTML=`
+    <div style="text-align:center;padding:26px 10px">
+      <div style="font-size:34px;margin-bottom:6px">🏁</div>
+      <div style="font-size:19px;font-weight:700;margin-bottom:14px">Oyun bitti — ${weeks.length} hafta</div>
+      <div class="weeksum" style="justify-content:center">
+        <div class="wsum"><div class="k">Başlangıç</div><div class="v">${fmt(kasaBas)} €</div></div>
+        <div class="wsum"><div class="k">Son kasa</div><div class="v ${kz>=0?'pos':'neg'}">${fmt(kasa)} €</div></div>
+        <div class="wsum"><div class="k">Toplam K/Z</div><div class="v ${kz>=0?'pos':'neg'}">${money(kz)}</div></div>
+        <div class="wsum"><div class="k">Toplam yatırılan</div><div class="v">${fmt(toplamYat)} €</div></div>
+        <div class="wsum"><div class="k">Getiri (ROI)</div><div class="v ${roi>=0?'pos':'neg'}">%${roi.toFixed(1)}</div></div>
+      </div>
+      <div class="note" style="margin-top:12px">
+        En iyi hafta : <b>${iyi.h}</b> (${money(iyi.net)}) · En kötü hafta : <b>${kotu.h}</b> (${money(kotu.net)})<br>
+        ROI, yatırdığın her 100 €'ya karşılık ne kazanıp kaybettiğini gösterir.
+      </div>
+    </div>`;
+  document.getElementById('weekSum').classList.add('hidden');
+  document.getElementById('btnNext').classList.add('hidden');
+  document.getElementById('weekTitle').textContent='Sonuç';
+  saveState();
+}
+
+function renderHist(){
+  const el=document.getElementById('histList');
+  if(gecmis.length===0){ el.innerHTML='<div class="empty">Henüz hafta tamamlanmadı.</div>'; return; }
+  el.innerHTML=[...gecmis].reverse().map(g=>`<div class="hrow">
+    <span>Hafta ${g.h}</span><span style="color:var(--muted)">${fmt(g.yat)} €</span>
+    <span style="color:${g.net>=0?'var(--green)':'var(--red)'};font-weight:700">${money(g.net)}</span>
+    <span>${fmt(g.kasa)} €</span></div>`).join('');
+}
+
+function resetGame(){
+  localStorage.removeItem(LS);
+  document.getElementById('game').classList.add('hidden');
+  document.getElementById('setup').classList.remove('hidden');
+  weeks=[]; wi=0; gecmis=[]; acildi=false;
+}
+
+/* --- ilerlemeyi kaydet (yenilemede kaybolmasın) --- */
+function saveState(){
+  try{ localStorage.setItem(LS, JSON.stringify({weeks,wi,kasa,kasaBas,toplamYat,gecmis,acildi})); }catch(e){}
+}
+function loadState(){
+  try{
+    const s=JSON.parse(localStorage.getItem(LS)||'null');
+    if(!s||!s.weeks||!s.weeks.length) return false;
+    ({weeks,wi,kasa,kasaBas,toplamYat,gecmis}=s);
+    document.getElementById('setup').classList.add('hidden');
+    document.getElementById('game').classList.remove('hidden');
+    renderWeek(); renderHist();
+    if(s.acildi) reveal();
+    return true;
+  }catch(e){ return false; }
+}
+loadState();
+</script>
+</body>
+</html>
