@@ -47,6 +47,17 @@
   .hstat .v{font-size:21px;font-weight:700;margin-top:3px}
   .hstat .v.pos{color:var(--green)} .hstat .v.neg{color:var(--red)} .hstat .v.acc{color:var(--accent)}
 
+  /* AÇIK SERİ BANDI */
+  .seribar{border-radius:14px;padding:12px 14px;margin-bottom:12px;display:flex;flex-wrap:wrap;
+    align-items:center;gap:14px;font-size:13px}
+  .seribar.acik{background:rgba(245,185,66,.12);border:1px solid rgba(245,185,66,.55)}
+  .seribar.kapali{background:var(--green-bg);border:1px solid rgba(34,197,94,.5)}
+  .seribar .sb{display:flex;flex-direction:column;gap:1px}
+  .seribar .sk{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+  .seribar .sv{font-size:18px;font-weight:800}
+  .seribar .sv.amber{color:var(--amber)} .seribar .sv.green{color:var(--green)} .seribar .sv.red{color:var(--red)}
+  .seribar .stitle{font-weight:800;font-size:14px;margin-right:4px}
+
   .weekbar{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
   .weektitle{font-size:16px;font-weight:700}
   .quick{display:flex;align-items:center;gap:6px;margin-left:auto;flex-wrap:wrap}
@@ -141,6 +152,9 @@
       <div class="hstat"><div class="k">Hafta</div><div class="v" id="hHafta">—</div></div>
     </div>
 
+    <!-- AÇIK SERİ TAKİBİ -->
+    <div id="seriBar" class="seribar hidden"></div>
+
     <div class="card">
       <div class="weekbar">
         <span class="weektitle" id="weekTitle">Hafta 1</span>
@@ -183,6 +197,8 @@
 <script>
 const LS='parionsGame';
 let weeks=[], wi=0, kasa=0, kasaBas=0, toplamYat=0, gecmis=[];
+// açık seri: son kazançtan bu yana
+let seriMac=0, seriYat=0, seriZarar=0, sonSeri=null;
 
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function fmt(n){ return (Math.round(n*100)/100).toFixed(2).replace('.',',').replace(/,00$/,''); }
@@ -231,6 +247,7 @@ function startGame(){
   if(weeks.length===0){ alert("Skorlu maç bulunamadı.\n\nSatır örneği:\nGalatasaray - Fenerbahce 2:1 2.10 3.40 3.20"); return; }
   kasaBas=parseFloat(document.getElementById('kasa').value)||1000;
   kasa=kasaBas; wi=0; toplamYat=0; gecmis=[];
+  seriMac=0; seriYat=0; seriZarar=0; sonSeri=null;
   document.getElementById('setup').classList.add('hidden');
   document.getElementById('game').classList.remove('hidden');
   renderWeek(); renderHist(); saveState();
@@ -241,7 +258,7 @@ function renderWeek(){
   document.getElementById('weekTitle').textContent=`Hafta ${wi+1} / ${weeks.length}`;
   document.getElementById('matchList').innerHTML=w.map((m,i)=>`<div class="mrow" id="row${i}"></div>`).join('');
   w.forEach((m,i)=>renderRow(i));
-  updateWeekSum(); updateHud(); checkWeekEnd();
+  updateWeekSum(); updateHud(); renderSeri(); checkWeekEnd();
 }
 
 // tek maç satırı — durumuna göre çizilir
@@ -312,13 +329,43 @@ function playMatch(i){
   const net = m.stake[idx]*m.od[idx] - bu;
   m.done='played'; m.net=net; m.bu=bu;
   kasa+=net; toplamYat+=bu;
-  renderRow(i); updateWeekSum(); updateHud(); checkWeekEnd(); saveState();
+
+  // --- açık seri takibi ---
+  seriMac++; seriYat+=bu; seriZarar-=net;      // net eksiyse kapatılacak tutar büyür
+  m.seriNo=seriMac; m.seriYat=seriYat;
+  if(seriZarar<=0.001){                         // seri kapandı (yatırılan geri geldi + üstü)
+    sonSeri={mac:seriMac, yat:seriYat, kar:-seriZarar};
+    seriMac=0; seriYat=0; seriZarar=0;
+  } else sonSeri=null;
+
+  renderRow(i); updateWeekSum(); updateHud(); renderSeri(); checkWeekEnd(); saveState();
 }
 function passMatch(i){
   const m=weeks[wi][i];
   if(m.done) return;
   m.done='pass'; m.net=0; m.bu=0; m.stake=[0,0,0];
   renderRow(i); updateWeekSum(); updateHud(); checkWeekEnd(); saveState();
+}
+
+// açık seri bandı — bir sonraki bahse karar verirken bakacağın yer
+function renderSeri(){
+  const el=document.getElementById('seriBar'); if(!el) return;
+  if(seriMac>0){
+    el.className='seribar acik';
+    el.innerHTML=`<span class="stitle">🔁 Açık seri</span>
+      <div class="sb"><span class="sk">Kazanamadığın maç</span><span class="sv amber">${seriMac}</span></div>
+      <div class="sb"><span class="sk">Bu seride yatırdığın</span><span class="sv amber">${fmt(seriYat)} €</span></div>
+      <div class="sb"><span class="sk">Kapatılacak</span><span class="sv red">${fmt(seriZarar)} €</span></div>
+      <div class="sb"><span class="sk">3.00 oranla kapatmak için</span><span class="sv">≈ ${fmt(seriZarar/2)} € mise</span></div>`;
+    el.classList.remove('hidden');
+  } else if(sonSeri){
+    el.className='seribar kapali';
+    el.innerHTML=`<span class="stitle">✅ Seri kapandı</span>
+      <div class="sb"><span class="sk">Kaç maç sürdü</span><span class="sv green">${sonSeri.mac}</span></div>
+      <div class="sb"><span class="sk">Seride yatırılan</span><span class="sv">${fmt(sonSeri.yat)} €</span></div>
+      <div class="sb"><span class="sk">Seri kârı</span><span class="sv green">${money(sonSeri.kar)}</span></div>`;
+    el.classList.remove('hidden');
+  } else el.classList.add('hidden');
 }
 
 function updateWeekSum(){
@@ -402,18 +449,19 @@ function resetGame(){
   localStorage.removeItem(LS);
   document.getElementById('game').classList.add('hidden');
   document.getElementById('setup').classList.remove('hidden');
-  weeks=[]; wi=0; gecmis=[];
+  weeks=[]; wi=0; gecmis=[]; seriMac=0; seriYat=0; seriZarar=0; sonSeri=null;
 }
 
 /* --- ilerlemeyi kaydet (yenilemede kaybolmasın) --- */
 function saveState(){
-  try{ localStorage.setItem(LS, JSON.stringify({weeks,wi,kasa,kasaBas,toplamYat,gecmis})); }catch(e){}
+  try{ localStorage.setItem(LS, JSON.stringify({weeks,wi,kasa,kasaBas,toplamYat,gecmis,seriMac,seriYat,seriZarar,sonSeri})); }catch(e){}
 }
 function loadState(){
   try{
     const s=JSON.parse(localStorage.getItem(LS)||'null');
     if(!s||!s.weeks||!s.weeks.length) return false;
     ({weeks,wi,kasa,kasaBas,toplamYat,gecmis}=s);
+    seriMac=s.seriMac||0; seriYat=s.seriYat||0; seriZarar=s.seriZarar||0; sonSeri=s.sonSeri||null;
     document.getElementById('setup').classList.add('hidden');
     document.getElementById('game').classList.remove('hidden');
     renderWeek(); renderHist();
