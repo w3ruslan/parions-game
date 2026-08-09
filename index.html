@@ -54,7 +54,17 @@
   .quick button{padding:7px 12px;font-size:12px}
 
   /* MAÇ SATIRLARI */
-  .head-row,.mrow{display:grid;grid-template-columns:minmax(190px,1fr) 108px 108px 108px 96px;gap:9px;align-items:center}
+  .head-row,.mrow{display:grid;grid-template-columns:minmax(160px,1fr) 96px 96px 96px 86px 104px;gap:9px;align-items:center}
+  .acts{display:flex;flex-direction:column;gap:5px}
+  .acts button{padding:7px 6px;font-size:11.5px;border-radius:9px}
+  .bplay{background:var(--green);color:#052e16;border-color:var(--green)}
+  .bplay:hover{background:#16a34a;border-color:#16a34a}
+  .bpass{background:var(--card2);color:var(--muted)}
+  .tag{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.4px;border-radius:20px;padding:3px 9px}
+  .tag.ok{background:var(--green-bg);color:var(--green);border:1px solid rgba(34,197,94,.5)}
+  .tag.no{background:var(--red-bg);color:var(--red);border:1px solid rgba(255,107,107,.45)}
+  .tag.pass{background:rgba(148,162,189,.12);color:var(--muted);border:1px solid var(--line)}
+  .mrow.pass{opacity:.5}
   .head-row{padding:0 10px 7px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.6px;
     border-bottom:1px solid var(--line)}
   .mrow{padding:8px 10px;border-bottom:1px solid rgba(42,53,80,.55);font-size:13px}
@@ -146,14 +156,14 @@
 
       <div class="head-row">
         <span>Maç</span><span style="text-align:center">1</span><span style="text-align:center">X</span>
-        <span style="text-align:center">2</span><span style="text-align:right">K/Z</span>
+        <span style="text-align:center">2</span><span style="text-align:right">K/Z</span><span style="text-align:center">İşlem</span>
       </div>
       <div id="matchList"></div>
 
       <div id="weekSum" class="weeksum hidden"></div>
 
-      <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
-        <button class="b-main b-go" id="btnReveal" style="flex:2;min-width:200px" onclick="reveal()">✅ Onayla ve sonuçları göster</button>
+      <div class="note">Her maçın kendi <b>▶ Oyna</b> düğmesi var — bir maçı oynayınca sonucu ve kasan anında güncellenir, sonraki maça ona göre karar verirsin. <b>⊘ Pas geç</b> (veya 0 yazıp Oyna) o maçı hesaba katmaz.</div>
+      <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
         <button class="b-main hidden" id="btnNext" style="flex:2;min-width:200px" onclick="nextWeek()">Sonraki hafta →</button>
         <button style="flex:1;min-width:120px" onclick="if(confirm('Oyun sıfırlansın mı?'))resetGame()">↺ Yeniden başla</button>
       </div>
@@ -172,7 +182,7 @@
 
 <script>
 const LS='parionsGame';
-let weeks=[], wi=0, kasa=0, kasaBas=0, toplamYat=0, gecmis=[], acildi=false;
+let weeks=[], wi=0, kasa=0, kasaBas=0, toplamYat=0, gecmis=[];
 
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function fmt(n){ return (Math.round(n*100)/100).toFixed(2).replace('.',',').replace(/,00$/,''); }
@@ -220,41 +230,64 @@ function startGame(){
   weeks=parseAll(raw,mode,per);
   if(weeks.length===0){ alert("Skorlu maç bulunamadı.\n\nSatır örneği:\nGalatasaray - Fenerbahce 2:1 2.10 3.40 3.20"); return; }
   kasaBas=parseFloat(document.getElementById('kasa').value)||1000;
-  kasa=kasaBas; wi=0; toplamYat=0; gecmis=[]; acildi=false;
+  kasa=kasaBas; wi=0; toplamYat=0; gecmis=[];
   document.getElementById('setup').classList.add('hidden');
   document.getElementById('game').classList.remove('hidden');
   renderWeek(); renderHist(); saveState();
 }
 
 function renderWeek(){
-  const w=weeks[wi]; acildi=false;
+  const w=weeks[wi];
   document.getElementById('weekTitle').textContent=`Hafta ${wi+1} / ${weeks.length}`;
-  document.getElementById('btnReveal').classList.remove('hidden');
-  document.getElementById('btnNext').classList.add('hidden');
-  document.getElementById('weekSum').classList.add('hidden');
-  const box=document.getElementById('matchList');
-  box.innerHTML=w.map((m,i)=>{
-    const cell=(k)=>`<div class="cellbox" id="c${i}_${k}">
-        <div class="od">${m.od[k].toFixed(2)}</div>
-        <input type="number" id="st${i}_${k}" min="0" step="1" placeholder="€" value="${m.stake[k]||''}" oninput="onStake(${i},${k},this.value)">
-      </div>`;
-    return `<div class="mrow" id="row${i}">
-      <span class="teams">${esc(m.h)}<span class="sc q">? : ?</span>${esc(m.a)}</span>
-      ${cell(0)}${cell(1)}${cell(2)}
-      <span class="pl zero" id="pl${i}">—</span>
-    </div>`;
-  }).join('');
-  updateHud();
+  document.getElementById('matchList').innerHTML=w.map((m,i)=>`<div class="mrow" id="row${i}"></div>`).join('');
+  w.forEach((m,i)=>renderRow(i));
+  updateWeekSum(); updateHud(); checkWeekEnd();
 }
 
-function onStake(i,k,v){ weeks[wi][i].stake[k]=parseFloat(v)||0; updateHud(); saveState(); }
+// tek maç satırı — durumuna göre çizilir
+function renderRow(i){
+  const m=weeks[wi][i], row=document.getElementById('row'+i);
+  if(!row) return;
+  const oynandi = m.done==='played', pas = m.done==='pass', bitti = !!m.done;
+  const idx = m.r==='1'?0:(m.r==='X'?1:2);
+  const bu = m.stake.reduce((a,b)=>a+b,0);
+  const kaz = oynandi ? m.stake[idx]*m.od[idx] : 0;
+  const net = oynandi ? kaz-bu : 0;
+
+  const cell=k=>{
+    let cls='cellbox';
+    if(oynandi) cls += (k===idx ? ' hit' : ' miss');
+    return `<div class="${cls}">
+      <div class="od">${m.od[k].toFixed(2)}</div>
+      <input type="number" id="st${i}_${k}" min="0" step="1" placeholder="€"
+        value="${m.stake[k]||''}" ${bitti?'disabled':''} oninput="onStake(${i},${k},this.value)">
+    </div>`;
+  };
+  const skor = bitti ? `<span class="sc">${esc(m.sc)}</span>` : `<span class="sc q">? : ?</span>`;
+  const kz = oynandi ? `<span class="pl ${net>=0?'pos':'neg'}">${money(net)}</span>`
+                     : (pas ? `<span class="pl zero">—</span>` : `<span class="pl zero">—</span>`);
+  const islem = bitti
+    ? (pas ? `<span class="tag pass">PAS</span>`
+           : `<span class="tag ${net>=0?'ok':'no'}">${net>=0?'KAZANDI':'KAYBETTİ'}</span>`)
+    : `<div class="acts">
+         <button class="bplay" onclick="playMatch(${i})">▶ Oyna</button>
+         <button class="bpass" onclick="passMatch(${i})">⊘ Pas geç</button>
+       </div>`;
+
+  row.className='mrow'+(oynandi?(net>=0?' win':' loss'):(pas?' pass':''));
+  row.innerHTML=`<span class="teams">${esc(m.h)}${skor}${esc(m.a)}</span>
+    ${cell(0)}${cell(1)}${cell(2)}
+    ${kz}<span style="text-align:center">${islem}</span>`;
+}
+
+function onStake(i,k,v){ const m=weeks[wi][i]; if(m.done) return; m.stake[k]=parseFloat(v)||0; saveState(); }
 function quickFill(k){
   const a=parseFloat(document.getElementById('qAmount').value)||0;
-  weeks[wi].forEach((m,i)=>{ m.stake[k]=a; const el=document.getElementById(`st${i}_${k}`); if(el) el.value=a||''; });
+  weeks[wi].forEach((m,i)=>{ if(m.done) return; m.stake[k]=a; const el=document.getElementById(`st${i}_${k}`); if(el) el.value=a||''; });
   updateHud(); saveState();
 }
 function quickClear(){
-  weeks[wi].forEach((m,i)=>{ m.stake=[0,0,0]; [0,1,2].forEach(k=>{const el=document.getElementById(`st${i}_${k}`); if(el) el.value='';}); });
+  weeks[wi].forEach((m,i)=>{ if(m.done) return; m.stake=[0,0,0]; [0,1,2].forEach(k=>{const el=document.getElementById(`st${i}_${k}`); if(el) el.value='';}); });
   updateHud(); saveState();
 }
 function haftaYatirim(){ return weeks[wi].reduce((s,m)=>s+m.stake.reduce((a,b)=>a+b,0),0); }
@@ -268,53 +301,60 @@ function updateHud(){
   document.getElementById('hHafta').textContent=(wi+1)+' / '+weeks.length;
 }
 
-function reveal(){
-  if(acildi) return;
+// --- TEK MAÇ OYNA ---
+function playMatch(i){
+  const m=weeks[wi][i];
+  if(m.done) return;
+  const bu=m.stake.reduce((a,b)=>a+b,0);
+  if(bu<=0){ passMatch(i); return; }                 // 0 yazdıysan = pas
+  if(bu>kasa && !confirm(`Yatırım ${fmt(bu)} € ama kasan ${fmt(kasa)} €. Devam edilsin mi?`)) return;
+  const idx = m.r==='1'?0:(m.r==='X'?1:2);
+  const net = m.stake[idx]*m.od[idx] - bu;
+  m.done='played'; m.net=net; m.bu=bu;
+  kasa+=net; toplamYat+=bu;
+  renderRow(i); updateWeekSum(); updateHud(); checkWeekEnd(); saveState();
+}
+function passMatch(i){
+  const m=weeks[wi][i];
+  if(m.done) return;
+  m.done='pass'; m.net=0; m.bu=0; m.stake=[0,0,0];
+  renderRow(i); updateWeekSum(); updateHud(); checkWeekEnd(); saveState();
+}
+
+function updateWeekSum(){
   const w=weeks[wi];
-  const yat=haftaYatirim();
-  if(yat<=0 && !confirm("Bu hafta hiç bahis koymadın. Yine de sonuçları görmek istiyor musun?")) return;
-  if(yat>kasa && !confirm(`Yatırım (${fmt(yat)} €) kasadan (${fmt(kasa)} €) fazla. Devam edilsin mi?`)) return;
-
-  acildi=true;
-  let donen=0;
-  w.forEach((m,i)=>{
-    const idx = m.r==='1'?0:(m.r==='X'?1:2);
-    const bu = m.stake.reduce((a,b)=>a+b,0);
-    const kaz = m.stake[idx]*m.od[idx];
-    donen += kaz;
-    const net = kaz-bu;
-    // skor + sonuç göster
-    const row=document.getElementById('row'+i);
-    row.querySelector('.teams').innerHTML=`${esc(m.h)}<span class="sc">${esc(m.sc)}</span>${esc(m.a)}`;
-    [0,1,2].forEach(k=>{
-      const c=document.getElementById(`c${i}_${k}`);
-      c.classList.add(k===idx?'hit':'miss');
-      const inp=document.getElementById(`st${i}_${k}`); if(inp) inp.disabled=true;
-    });
-    const pl=document.getElementById('pl'+i);
-    if(bu<=0){ pl.textContent='—'; pl.className='pl zero'; row.classList.add('none'); }
-    else { pl.textContent=money(net); pl.className='pl '+(net>=0?'pos':'neg'); row.classList.add(net>=0?'win':'loss'); }
-  });
-
-  const net=donen-yat;
-  kasa+=net; toplamYat+=yat;
-  gecmis.push({h:wi+1, yat, net, kasa});
-
+  const oynanan=w.filter(m=>m.done==='played');
   const s=document.getElementById('weekSum');
-  const isabet=w.filter(m=>m.stake[m.r==='1'?0:(m.r==='X'?1:2)]>0).length;
-  const oynanan=w.filter(m=>m.stake.reduce((a,b)=>a+b,0)>0).length;
+  if(oynanan.length===0){ s.classList.add('hidden'); return; }
+  const yat=oynanan.reduce((a,m)=>a+m.bu,0);
+  const net=oynanan.reduce((a,m)=>a+m.net,0);
+  const donen=yat+net;
+  const isabet=oynanan.filter(m=>m.net>=0 && m.stake[m.r==='1'?0:(m.r==='X'?1:2)]>0).length;
+  const pas=w.filter(m=>m.done==='pass').length;
   s.innerHTML=`
     <div class="wsum"><div class="k">Yatırılan</div><div class="v">${fmt(yat)} €</div></div>
     <div class="wsum"><div class="k">Dönen</div><div class="v">${fmt(donen)} €</div></div>
     <div class="wsum"><div class="k">Hafta K/Z</div><div class="v ${net>=0?'pos':'neg'}">${money(net)}</div></div>
-    <div class="wsum"><div class="k">Tutan</div><div class="v">${isabet} / ${oynanan}</div></div>
-    <div class="wsum"><div class="k">Yeni kasa</div><div class="v">${fmt(kasa)} €</div></div>`;
+    <div class="wsum"><div class="k">Tutan</div><div class="v">${isabet} / ${oynanan.length}</div></div>
+    <div class="wsum"><div class="k">Pas</div><div class="v">${pas}</div></div>
+    <div class="wsum"><div class="k">Kasa</div><div class="v">${fmt(kasa)} €</div></div>`;
   s.classList.remove('hidden');
+}
 
-  document.getElementById('btnReveal').classList.add('hidden');
-  document.getElementById('btnNext').classList.remove('hidden');
-  document.getElementById('btnNext').textContent = (wi+1<weeks.length) ? 'Sonraki hafta →' : '🏁 Oyunu bitir';
-  updateHud(); renderHist(); saveState();
+// hafta bitti mi? (tüm maçlar oynandı veya pas geçildi)
+function checkWeekEnd(){
+  const w=weeks[wi];
+  const bitti=w.every(m=>!!m.done);
+  const btn=document.getElementById('btnNext');
+  if(bitti){
+    if(!w._kaydedildi){
+      const oyn=w.filter(m=>m.done==='played');
+      gecmis.push({h:wi+1, yat:oyn.reduce((a,m)=>a+m.bu,0), net:oyn.reduce((a,m)=>a+m.net,0), kasa});
+      w._kaydedildi=true; renderHist();
+    }
+    btn.classList.remove('hidden');
+    btn.textContent = (wi+1<weeks.length) ? 'Sonraki hafta →' : '🏁 Oyunu bitir';
+  } else btn.classList.add('hidden');
 }
 
 function nextWeek(){
@@ -362,12 +402,12 @@ function resetGame(){
   localStorage.removeItem(LS);
   document.getElementById('game').classList.add('hidden');
   document.getElementById('setup').classList.remove('hidden');
-  weeks=[]; wi=0; gecmis=[]; acildi=false;
+  weeks=[]; wi=0; gecmis=[];
 }
 
 /* --- ilerlemeyi kaydet (yenilemede kaybolmasın) --- */
 function saveState(){
-  try{ localStorage.setItem(LS, JSON.stringify({weeks,wi,kasa,kasaBas,toplamYat,gecmis,acildi})); }catch(e){}
+  try{ localStorage.setItem(LS, JSON.stringify({weeks,wi,kasa,kasaBas,toplamYat,gecmis})); }catch(e){}
 }
 function loadState(){
   try{
@@ -377,7 +417,6 @@ function loadState(){
     document.getElementById('setup').classList.add('hidden');
     document.getElementById('game').classList.remove('hidden');
     renderWeek(); renderHist();
-    if(s.acildi) reveal();
     return true;
   }catch(e){ return false; }
 }
