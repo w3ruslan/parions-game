@@ -273,13 +273,21 @@ function parseAll(raw, mode, per){
     satirlar.forEach(line=>{
       const s=line.trim(); if(!s) return;
       const rn=roundNo(s);
-      if(rn!==null){ bulundu++; aktif={etiket:(rn?('Round '+rn):('Round '+(hafta.length+1))),maclar:[]}; hafta.push(aktif); return; }
+      if(rn!==null){ bulundu++; aktif={no:rn, etiket:(rn?('Round '+rn):('Round '+(hafta.length+1))),maclar:[]}; hafta.push(aktif); return; }
       const mc=tekMac(s);
-      if(mc){ if(!aktif){ aktif={etiket:'Round 1',maclar:[]}; hafta.push(aktif); } aktif.maclar.push(mc); }
+      if(mc){ if(!aktif){ aktif={no:0, etiket:'Round 1',maclar:[]}; hafta.push(aktif); } aktif.maclar.push(mc); }
     });
     if(bulundu>0){
       const dolu=hafta.filter(h=>h.maclar.length);
-      if(dolu.length){ etiketler=dolu.map(h=>h.etiket); return dolu.map(h=>h.maclar); }
+      if(dolu.length){
+        // hafta numaralari buyukten kucuge yapistirildiysa (8. Round, 7. Round ...)
+        // haftalari eskiden yeniye cevir; mac sirasi hafta icinde bozulmaz
+        const nolar=dolu.map(h=>h.no);
+        const azalan = dolu.length>1 && nolar.every(n=>n>0)
+                       && nolar.every((n,i)=>i===0 || n<nolar[i-1]);
+        if(azalan) dolu.reverse();
+        etiketler=dolu.map(h=>h.etiket); return dolu.map(h=>h.maclar);
+      }
     }
   }
 
