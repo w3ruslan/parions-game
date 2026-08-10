@@ -80,6 +80,11 @@
     border-bottom:1px solid var(--line)}
   .mrow{padding:8px 10px;border-bottom:1px solid rgba(42,53,80,.55);font-size:13px}
   .mrow.win{background:var(--green-bg)} .mrow.loss{background:var(--red-bg)} .mrow.none{opacity:.62}
+  .bundo{padding:3px 8px;font-size:12px;border-radius:8px;margin-left:6px;line-height:1;
+    background:var(--card2);border:1px solid var(--line);color:var(--muted);cursor:pointer;vertical-align:middle}
+  .bundo:hover{border-color:var(--amber);color:var(--amber)}
+  #btnUndo:disabled,#btnPrev:disabled{opacity:.35;cursor:default}
+  #btnUndo{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .xdry{display:inline-block;min-width:20px;text-align:center;background:var(--card2);border:1px solid var(--line);
     color:var(--muted);border-radius:20px;padding:1px 6px;font-size:10.5px;font-weight:800;margin-right:7px;
     font-family:ui-monospace,Menlo,monospace}
@@ -197,6 +202,8 @@
       <div class="note">Her maçın kendi <b>▶ Oyna</b> düğmesi var — bir maçı oynayınca sonucu ve kasan anında güncellenir, sonraki maça ona göre karar verirsin. <b>⊘ Pas geç</b> (veya 0 yazıp Oyna) o maçı hesaba katmaz.</div>
       <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
         <button class="b-main hidden" id="btnNext" style="flex:2;min-width:200px" onclick="nextWeek()">Sonraki hafta →</button>
+        <button id="btnUndo" style="flex:1;min-width:170px" onclick="geriAl()">↩ Geri al</button>
+        <button id="btnPrev" style="flex:1;min-width:150px" onclick="prevWeek()">← Önceki hafta</button>
         <button style="flex:1;min-width:150px" onclick="copyReport()">📋 Sonuçları kopyala</button>
         <button style="flex:1;min-width:120px" onclick="if(confirm('Oyun sıfırlansın mı?'))resetGame()">↺ Yeniden başla</button>
       </div>
@@ -221,6 +228,10 @@ let weeks=[], wi=0, kasa=0, kasaBas=0, toplamYat=0, gecmis=[], etiketler=[];
 let seriMac=0, seriYat=0, seriZarar=0, sonSeri=null;
 // ligde kac mactir beraberlik yok
 let beraberliksiz=0;
+// geri alma yigini + son islem yapilan mac
+let undoStack=[], sonMac=null, kaydedildi=[];
+const UNDO_LS='parionsUndo', UNDO_MAX=10;
+const kis=(t,n=11)=>{t=String(t||''); return t.length>n ? t.slice(0,n-1)+'…' : t;};
 
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function fmt(n){ return (Math.round(n*100)/100).toFixed(2).replace('.',',').replace(/,00$/,''); }
@@ -301,6 +312,7 @@ function startGame(){
   kasaBas=parseFloat(document.getElementById('kasa').value)||1000;
   kasa=kasaBas; wi=0; toplamYat=0; gecmis=[];
   seriMac=0; seriYat=0; seriZarar=0; sonSeri=null; beraberliksiz=0;
+  undoStack=[]; sonMac=null; oncekiSonMac=null; kaydedildi=[]; localStorage.removeItem(UNDO_LS);
   document.getElementById('setup').classList.add('hidden');
   document.getElementById('game').classList.remove('hidden');
   renderWeek(); renderHist(); saveState();
@@ -313,6 +325,8 @@ function renderWeek(){
   document.getElementById('matchList').innerHTML=w.map((m,i)=>`<div class="mrow" id="row${i}"></div>`).join('');
   w.forEach((m,i)=>renderRow(i));
   updateWeekSum(); updateHud(); renderSeri(); checkWeekEnd();
+  oncekiSonMac = sonMac ? {w:sonMac.w,i:sonMac.i} : null;
+  undoBtnTazele();
 }
 
 // tek maç satırı — durumuna göre çizilir
@@ -347,9 +361,11 @@ function renderRow(i){
                      : (pas ? `<span class="pl sonuc">${m.r}</span>`
                             : (yatirilacak>0 ? `<span class="pl yatir">${fmt(yatirilacak)} €<span class="ylbl">yatır</span></span>`
                                              : `<span class="pl zero">—</span>`));
+  const sonMu = !!(sonMac && sonMac.w===wi && sonMac.i===i && undoStack.length);
+  const geriBtn = sonMu ? `<button class="bundo" title="Bu maçı geri al" onclick="geriAl()">↩</button>` : '';
   const islem = bitti
-    ? (pas ? `<span class="tag pass">PAS</span>`
-           : `<span class="tag ${net>=0?'ok':'no'}">${net>=0?'KAZANDI':'KAYBETTİ'}</span>`)
+    ? (pas ? `<span class="tag pass">PAS</span>${geriBtn}`
+           : `<span class="tag ${net>=0?'ok':'no'}">${net>=0?'KAZANDI':'KAYBETTİ'}</span>${geriBtn}`)
     : `<div class="acts">
          <button class="bplay" onclick="playMatch(${i})">▶ Oyna</button>
          <button class="bpass" onclick="passMatch(${i})">⊘ Pas geç</button>
@@ -364,6 +380,13 @@ function renderRow(i){
     ${kz}<span style="text-align:center">${islem}</span>`;
 }
 
+let oncekiSonMac=null;
+function sonMacTazele(){
+  if(oncekiSonMac && oncekiSonMac.w===wi && weeks[wi] && weeks[wi][oncekiSonMac.i]
+     && !(sonMac && sonMac.w===wi && sonMac.i===oncekiSonMac.i)) renderRow(oncekiSonMac.i);
+  if(sonMac && sonMac.w===wi) renderRow(sonMac.i);
+  oncekiSonMac = sonMac ? {w:sonMac.w, i:sonMac.i} : null;
+}
 function guncelleSag(i){
   const m=weeks[wi][i], row=document.getElementById('row'+i); if(!row) return;
   const hedefMod=girisMod()==='hedef';
@@ -446,6 +469,8 @@ function playMatch(i){
   const bu=m.stake.reduce((a,b)=>a+b,0);
   if(bu<=0){ passMatch(i); return; }                 // 0 yazdıysan = pas
   if(bu>kasa && !confirm(`Yatırım ${fmt(bu)} € ama kasan ${fmt(kasa)} €. Devam edilsin mi?`)) return;
+  undoKaydet(`${kis(m.h)} – ${kis(m.a)}`);
+  sonMac={w:wi, i:i};
   const idx = m.r==='1'?0:(m.r==='X'?1:2);
   const net = m.stake[idx]*m.od[idx] - bu;
   m.done='played'; m.net=net; m.bu=bu;
@@ -460,8 +485,42 @@ function playMatch(i){
     seriMac=0; seriYat=0; seriZarar=0;
   } else sonSeri=null;
 
-  renderRow(i); hedefleriTazele(); tazeleXRozet(); updateWeekSum(); updateHud(); renderSeri(); checkWeekEnd(); saveState();
+  renderRow(i); hedefleriTazele(); tazeleXRozet(); updateWeekSum(); updateHud(); renderSeri(); checkWeekEnd(); saveState(); undoYaz(); undoBtnTazele(); sonMacTazele();
 }
+/* ---------- GERI ALMA ---------- */
+function anlikDurum(){
+  return JSON.stringify({weeks,wi,kasa,toplamYat,gecmis,seriMac,seriYat,seriZarar,sonSeri,beraberliksiz,sonMac,kaydedildi});
+}
+function undoKaydet(etiket){
+  undoStack.push({s:anlikDurum(), t:etiket});
+  if(undoStack.length>UNDO_MAX) undoStack.shift();
+}
+function undoYaz(){
+  try{ localStorage.setItem(UNDO_LS, JSON.stringify(undoStack)); }
+  catch(e){ undoStack=undoStack.slice(-3); try{ localStorage.setItem(UNDO_LS, JSON.stringify(undoStack)); }catch(e2){ localStorage.removeItem(UNDO_LS); } }
+}
+function geriAl(){
+  if(!undoStack.length){ return; }
+  const u=undoStack.pop();
+  const d=JSON.parse(u.s);
+  weeks=d.weeks; wi=d.wi; kasa=d.kasa; toplamYat=d.toplamYat; gecmis=d.gecmis;
+  seriMac=d.seriMac; seriYat=d.seriYat; seriZarar=d.seriZarar; sonSeri=d.sonSeri;
+  beraberliksiz=d.beraberliksiz; sonMac=d.sonMac||null; kaydedildi=d.kaydedildi||[];
+  document.getElementById('matchList').style.textAlign='';
+  document.getElementById('weekSum').classList.remove('hidden');
+  renderWeek(); renderHist(); saveState(); undoYaz(); undoBtnTazele();
+}
+function undoBtnTazele(){
+  const b=document.getElementById('btnUndo');
+  if(b){
+    b.disabled = undoStack.length===0;
+    const t = undoStack.length ? undoStack[undoStack.length-1].t : '';
+    b.textContent = undoStack.length ? ('↩ Geri al  ·  '+t) : '↩ Geri al';
+  }
+  const p=document.getElementById('btnPrev');
+  if(p) p.disabled = (wi<=0);
+}
+
 // mac acildiginda beraberlik kurakligi sayacini guncelle
 // oynanmamis satirlarin rozetini guncelle
 function tazeleXRozet(){
@@ -481,9 +540,11 @@ function xSayaciIsle(m){
 function passMatch(i){
   const m=weeks[wi][i];
   if(m.done) return;
+  undoKaydet(`${kis(m.h)} – ${kis(m.a)} · pas`);
+  sonMac={w:wi, i:i};
   m.done='pass'; m.net=0; m.bu=0; m.stake=[0,0,0];
   xSayaciIsle(m);
-  renderRow(i); tazeleXRozet(); updateWeekSum(); updateHud(); checkWeekEnd(); saveState();
+  renderRow(i); tazeleXRozet(); updateWeekSum(); updateHud(); checkWeekEnd(); saveState(); undoYaz(); undoBtnTazele(); sonMacTazele();
 }
 
 // açık seri bandı — bir sonraki bahse karar verirken bakacağın yer
@@ -533,19 +594,25 @@ function checkWeekEnd(){
   const bitti=w.every(m=>!!m.done);
   const btn=document.getElementById('btnNext');
   if(bitti){
-    if(!w._kaydedildi){
+    if(!kaydedildi[wi]){
       const oyn=w.filter(m=>m.done==='played');
       gecmis.push({h:(etiketler[wi]||('Hafta '+(wi+1))), yat:oyn.reduce((a,m)=>a+m.bu,0), net:oyn.reduce((a,m)=>a+m.net,0), kasa});
-      w._kaydedildi=true; renderHist();
+      kaydedildi[wi]=true; renderHist();
     }
     btn.classList.remove('hidden');
     btn.textContent = (wi+1<weeks.length) ? 'Sonraki hafta →' : '🏁 Oyunu bitir';
   } else btn.classList.add('hidden');
+  undoBtnTazele();
 }
 
+function prevWeek(){
+  if(wi<=0) return;
+  wi--; renderWeek(); saveState(); undoBtnTazele();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
 function nextWeek(){
-  if(wi+1<weeks.length){ wi++; renderWeek(); saveState(); window.scrollTo({top:0,behavior:'smooth'}); }
-  else finish();
+  if(wi+1<weeks.length){ wi++; renderWeek(); saveState(); undoBtnTazele(); window.scrollTo({top:0,behavior:'smooth'}); }
+  else { undoKaydet('oyunu bitir'); undoYaz(); finish(); undoBtnTazele(); }
 }
 
 function finish(){
@@ -650,11 +717,12 @@ function resetGame(){
   document.getElementById('game').classList.add('hidden');
   document.getElementById('setup').classList.remove('hidden');
   weeks=[]; wi=0; gecmis=[]; etiketler=[]; seriMac=0; seriYat=0; seriZarar=0; sonSeri=null; beraberliksiz=0;
+  undoStack=[]; sonMac=null; oncekiSonMac=null; kaydedildi=[]; localStorage.removeItem(UNDO_LS);
 }
 
 /* --- ilerlemeyi kaydet (yenilemede kaybolmasın) --- */
 function saveState(){
-  try{ localStorage.setItem(LS, JSON.stringify({weeks,wi,kasa,kasaBas,toplamYat,gecmis,seriMac,seriYat,seriZarar,sonSeri,etiketler,beraberliksiz})); }catch(e){}
+  try{ localStorage.setItem(LS, JSON.stringify({weeks,wi,kasa,kasaBas,toplamYat,gecmis,seriMac,seriYat,seriZarar,sonSeri,etiketler,beraberliksiz,sonMac,kaydedildi})); }catch(e){}
 }
 function loadState(){
   try{
@@ -663,6 +731,8 @@ function loadState(){
     ({weeks,wi,kasa,kasaBas,toplamYat,gecmis}=s);
     etiketler=s.etiketler||[]; beraberliksiz=s.beraberliksiz||0;
     seriMac=s.seriMac||0; seriYat=s.seriYat||0; seriZarar=s.seriZarar||0; sonSeri=s.sonSeri||null;
+    sonMac=s.sonMac||null; kaydedildi=s.kaydedildi||[];
+    try{ undoStack=JSON.parse(localStorage.getItem(UNDO_LS)||'[]')||[]; }catch(e){ undoStack=[]; }
     document.getElementById('setup').classList.add('hidden');
     document.getElementById('game').classList.remove('hidden');
     renderWeek(); renderHist();
