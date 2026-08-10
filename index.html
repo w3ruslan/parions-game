@@ -138,7 +138,7 @@
       <div>
         <span class="lbl">Hafta ayrımı</span>
         <select id="weekMode">
-          <option value="auto">Boş satır varsa ona göre</option>
+          <option value="auto">Otomatik (Round / boş satır)</option>
           <option value="count">Hep maç sayısına göre</option>
         </select>
       </div>
@@ -202,7 +202,7 @@
 
 <script>
 const LS='parionsGame';
-let weeks=[], wi=0, kasa=0, kasaBas=0, toplamYat=0, gecmis=[];
+let weeks=[], wi=0, kasa=0, kasaBas=0, toplamYat=0, gecmis=[], etiketler=[];
 // açık seri: son kazançtan bu yana
 let seriMac=0, seriYat=0, seriZarar=0, sonSeri=null;
 
@@ -218,28 +218,59 @@ function ultraClean(t){
 }
 const RX=/^(?:.*?\d{2}:\d{2}\s+)?(.+?)\s+-\s+(.+?)\s+(\d{1,2}\s*:\s*\d{1,2})\s+(?:(\d{1,2})\s+)?(\d+\.\d+)\s+(\d+\.\d+)\s+(\d+\.\d+)/;
 
+// "Round 12", "Runde 3", "Journée 5", "Hafta 7", "Matchweek 2", "Week 4", "12. Round" gibi hafta işaretleri
+const ROUND_RX=/^\s*(?:(\d{1,2})\s*[.°)]?\s*)?(?:round|runde|rnd|journ[ée]e|jornada|giornata|matchweek|match\s*week|spieltag|hafta|week|kolejka|etapa)\s*[:.\-]?\s*(\d{1,2})?\s*$/i;
+function roundNo(s){
+  const m=s.match(ROUND_RX);
+  if(!m) return null;
+  const n=m[2]||m[1];
+  return n ? parseInt(n) : 0;
+}
+function tekMac(s){
+  const m=s.match(RX); if(!m) return null;
+  const h=ultraClean(m[1]), a=ultraClean(m[2]);
+  const sc=m[3].replace(/\s+/g,'');
+  const o=[parseFloat(m[5]),parseFloat(m[6]),parseFloat(m[7])];
+  if(!h||!a||isNaN(o[0])) return null;
+  const p=sc.split(':'), hg=parseInt(p[0]), ag=parseInt(p[1]);
+  if(isNaN(hg)||isNaN(ag)) return null;
+  return {h,a,sc,od:o,r:(hg===ag?'X':(hg>ag?'1':'2')),stake:[0,0,0]};
+}
+
 function parseAll(raw, mode, per){
-  const bloklar = raw.split(/\n\s*\n/);           // boş satır = hafta ayrımı
-  const kullanBlok = (mode==='auto' && bloklar.filter(b=>b.trim()).length>1);
-  const hepsi=[], bloklu=[];
-  (kullanBlok?bloklar:[raw]).forEach(blok=>{
-    const bu=[];
-    blok.split(/\r?\n/).forEach(line=>{
+  const satirlar=raw.split(/\r?\n/);
+
+  // 1) ÖNCELİK: "Round N" satırları varsa haftaları onlara göre kur
+  if(mode!=='count'){
+    const hafta=[]; let aktif=null, bulundu=0;
+    satirlar.forEach(line=>{
       const s=line.trim(); if(!s) return;
-      const m=s.match(RX); if(!m) return;
-      const h=ultraClean(m[1]), a=ultraClean(m[2]);
-      const sc=m[3].replace(/\s+/g,'');
-      const o=[parseFloat(m[5]),parseFloat(m[6]),parseFloat(m[7])];
-      if(!h||!a||isNaN(o[0])) return;
-      const p=sc.split(':'), hg=parseInt(p[0]), ag=parseInt(p[1]);
-      if(isNaN(hg)||isNaN(ag)) return;
-      const r = hg===ag ? 'X' : (hg>ag ? '1' : '2');
-      const mac={h,a,sc,od:o,r,stake:[0,0,0]};
-      bu.push(mac); hepsi.push(mac);
+      const rn=roundNo(s);
+      if(rn!==null){ bulundu++; aktif={etiket:(rn?('Round '+rn):('Round '+(hafta.length+1))),maclar:[]}; hafta.push(aktif); return; }
+      const mc=tekMac(s);
+      if(mc){ if(!aktif){ aktif={etiket:'Round 1',maclar:[]}; hafta.push(aktif); } aktif.maclar.push(mc); }
     });
-    if(bu.length) bloklu.push(bu);
-  });
-  if(kullanBlok) return bloklu;
+    if(bulundu>0){
+      const dolu=hafta.filter(h=>h.maclar.length);
+      if(dolu.length){ etiketler=dolu.map(h=>h.etiket); return dolu.map(h=>h.maclar); }
+    }
+  }
+
+  // 2) Round yoksa: boş satır ayrımı
+  etiketler=[];
+  const bloklar=raw.split(/\n\s*\n/);
+  if(mode==='auto' && bloklar.filter(b=>b.trim()).length>1){
+    const out=[];
+    bloklar.forEach(b=>{
+      const bu=[]; b.split(/\r?\n/).forEach(l=>{ const m=tekMac(l.trim()); if(m) bu.push(m); });
+      if(bu.length) out.push(bu);
+    });
+    if(out.length) return out;
+  }
+
+  // 3) Son çare: maç sayısına göre böl
+  const hepsi=[];
+  satirlar.forEach(l=>{ const m=tekMac(l.trim()); if(m) hepsi.push(m); });
   const out=[];
   for(let i=0;i<hepsi.length;i+=per) out.push(hepsi.slice(i,i+per));
   return out;
@@ -261,7 +292,8 @@ function startGame(){
 
 function renderWeek(){
   const w=weeks[wi];
-  document.getElementById('weekTitle').textContent=`Hafta ${wi+1} / ${weeks.length}`;
+  const et=etiketler[wi] || ('Hafta '+(wi+1));
+  document.getElementById('weekTitle').textContent=`${et}  ·  ${wi+1} / ${weeks.length}`;
   document.getElementById('matchList').innerHTML=w.map((m,i)=>`<div class="mrow" id="row${i}"></div>`).join('');
   w.forEach((m,i)=>renderRow(i));
   updateWeekSum(); updateHud(); renderSeri(); checkWeekEnd();
@@ -322,7 +354,7 @@ function updateHud(){
   const e=document.getElementById('hKZ'); e.textContent=money(kz);
   e.className='v '+(kz>0?'pos':(kz<0?'neg':''));
   document.getElementById('hYat').textContent=fmt(toplamYat)+' €';
-  document.getElementById('hHafta').textContent=(wi+1)+' / '+weeks.length;
+  document.getElementById('hHafta').textContent=(etiketler[wi]? etiketler[wi].replace('Round ','R'):(wi+1))+' / '+weeks.length;
 }
 
 // --- TEK MAÇ OYNA ---
@@ -403,7 +435,7 @@ function checkWeekEnd(){
   if(bitti){
     if(!w._kaydedildi){
       const oyn=w.filter(m=>m.done==='played');
-      gecmis.push({h:wi+1, yat:oyn.reduce((a,m)=>a+m.bu,0), net:oyn.reduce((a,m)=>a+m.net,0), kasa});
+      gecmis.push({h:(etiketler[wi]||('Hafta '+(wi+1))), yat:oyn.reduce((a,m)=>a+m.bu,0), net:oyn.reduce((a,m)=>a+m.net,0), kasa});
       w._kaydedildi=true; renderHist();
     }
     btn.classList.remove('hidden');
@@ -447,7 +479,7 @@ function renderHist(){
   const el=document.getElementById('histList');
   if(gecmis.length===0){ el.innerHTML='<div class="empty">Henüz hafta tamamlanmadı.</div>'; return; }
   el.innerHTML=[...gecmis].reverse().map(g=>`<div class="hrow">
-    <span>Hafta ${g.h}</span><span style="color:var(--muted)">${fmt(g.yat)} €</span>
+    <span>${g.h}</span><span style="color:var(--muted)">${fmt(g.yat)} €</span>
     <span style="color:${g.net>=0?'var(--green)':'var(--red)'};font-weight:700">${money(g.net)}</span>
     <span>${fmt(g.kasa)} €</span></div>`).join('');
 }
@@ -457,6 +489,7 @@ function buildReport(){
   let k=kasaBas, yatT=0, donT=0, oyn=0, pas=0, tut=0;
   let kayipSeri=0, enUzunKayip=0, tepe=kasaBas, enBuyukDusus=0;
   const sat=[];
+  const etk=i=>(etiketler[i]? etiketler[i].replace('Round ','R') : ('H'+(i+1)));
   weeks.forEach((w,wIdx)=>{
     w.forEach(m=>{
       if(!m.done) return;
@@ -472,7 +505,7 @@ function buildReport(){
       if(tepe-k>enBuyukDusus) enBuyukDusus=tepe-k;
       const bahis=[0,1,2].filter(x=>m.stake[x]>0)
         .map(x=>`${['1','X','2'][x]}:${m.stake[x]}@${m.od[x].toFixed(2)}`).join(' ');
-      sat.push(`H${wIdx+1} | ${m.h} ${m.sc} ${m.a} | sonuc ${m.r} | ${bahis} | donen ${donen.toFixed(2)} | net ${net>=0?'+':''}${net.toFixed(2)} | kasa ${k.toFixed(2)}`);
+      sat.push(`${etk(wIdx)} | ${m.h} ${m.sc} ${m.a} | sonuc ${m.r} | ${bahis} | donen ${donen.toFixed(2)} | net ${net>=0?'+':''}${net.toFixed(2)} | kasa ${k.toFixed(2)}`);
     });
   });
   const kz=k-kasaBas;
@@ -516,18 +549,19 @@ function resetGame(){
   localStorage.removeItem(LS);
   document.getElementById('game').classList.add('hidden');
   document.getElementById('setup').classList.remove('hidden');
-  weeks=[]; wi=0; gecmis=[]; seriMac=0; seriYat=0; seriZarar=0; sonSeri=null;
+  weeks=[]; wi=0; gecmis=[]; etiketler=[]; seriMac=0; seriYat=0; seriZarar=0; sonSeri=null;
 }
 
 /* --- ilerlemeyi kaydet (yenilemede kaybolmasın) --- */
 function saveState(){
-  try{ localStorage.setItem(LS, JSON.stringify({weeks,wi,kasa,kasaBas,toplamYat,gecmis,seriMac,seriYat,seriZarar,sonSeri})); }catch(e){}
+  try{ localStorage.setItem(LS, JSON.stringify({weeks,wi,kasa,kasaBas,toplamYat,gecmis,seriMac,seriYat,seriZarar,sonSeri,etiketler})); }catch(e){}
 }
 function loadState(){
   try{
     const s=JSON.parse(localStorage.getItem(LS)||'null');
     if(!s||!s.weeks||!s.weeks.length) return false;
     ({weeks,wi,kasa,kasaBas,toplamYat,gecmis}=s);
+    etiketler=s.etiketler||[];
     seriMac=s.seriMac||0; seriYat=s.seriYat||0; seriZarar=s.seriZarar||0; sonSeri=s.sonSeri||null;
     document.getElementById('setup').classList.add('hidden');
     document.getElementById('game').classList.remove('hidden');
