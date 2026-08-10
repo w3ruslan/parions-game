@@ -80,6 +80,11 @@
     border-bottom:1px solid var(--line)}
   .mrow{padding:8px 10px;border-bottom:1px solid rgba(42,53,80,.55);font-size:13px}
   .mrow.win{background:var(--green-bg)} .mrow.loss{background:var(--red-bg)} .mrow.none{opacity:.62}
+  .xdry{display:inline-block;min-width:20px;text-align:center;background:var(--card2);border:1px solid var(--line);
+    color:var(--muted);border-radius:20px;padding:1px 6px;font-size:10.5px;font-weight:800;margin-right:7px;
+    font-family:ui-monospace,Menlo,monospace}
+  .xdry.sari{background:rgba(245,185,66,.18);border-color:rgba(245,185,66,.6);color:var(--amber)}
+  .xdry.kirmizi{background:rgba(255,107,107,.18);border-color:rgba(255,107,107,.6);color:var(--red)}
   .teams{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
   .sc{display:inline-block;background:var(--card2);border:1px solid var(--line);border-radius:6px;
     padding:0 6px;margin:0 6px;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;font-weight:700}
@@ -98,6 +103,8 @@
   .pl{text-align:right;font-weight:800;font-size:14px;white-space:nowrap}
   .pl.pos{color:var(--green)} .pl.neg{color:var(--red)} .pl.zero{color:var(--muted)}
   .pl.sonuc{color:var(--amber);font-size:16px}
+  .pl.yatir{color:var(--red);font-size:15px;line-height:1.1;display:inline-block}
+  .pl.yatir .ylbl{display:block;font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px}
 
   .weeksum{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
   .wsum{flex:1;min-width:110px;background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center}
@@ -154,6 +161,7 @@
       <div class="hstat"><div class="k">Kasa</div><div class="v acc" id="hKasa">—</div></div>
       <div class="hstat"><div class="k">Toplam K/Z</div><div class="v" id="hKZ">—</div></div>
       <div class="hstat"><div class="k">Yatırılan</div><div class="v" id="hYat">—</div></div>
+      <div class="hstat"><div class="k">Beraberliksiz</div><div class="v" id="hDry">—</div></div>
       <div class="hstat"><div class="k">Hafta</div><div class="v" id="hHafta">—</div></div>
     </div>
 
@@ -166,8 +174,8 @@
         <span class="quick">
           <span class="lbl" style="margin:0">Yazdığım rakam:</span>
           <select id="girisMod" onchange="modDegis()" style="width:auto;font-size:12px;padding:6px 9px">
-            <option value="mise">💶 Yatırım (mise)</option>
             <option value="hedef">🎯 Kazanmak istediğim kâr</option>
+            <option value="mise">💶 Yatırım (mise)</option>
           </select>
           <span class="lbl" style="margin:0 0 0 6px">Hepsine:</span>
           <input type="number" id="qAmount" value="10" step="1" placeholder="€">
@@ -211,6 +219,8 @@ const LS='parionsGame';
 let weeks=[], wi=0, kasa=0, kasaBas=0, toplamYat=0, gecmis=[], etiketler=[];
 // açık seri: son kazançtan bu yana
 let seriMac=0, seriYat=0, seriZarar=0, sonSeri=null;
+// ligde kac mactir beraberlik yok
+let beraberliksiz=0;
 
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function fmt(n){ return (Math.round(n*100)/100).toFixed(2).replace('.',',').replace(/,00$/,''); }
@@ -290,7 +300,7 @@ function startGame(){
   if(weeks.length===0){ alert("Skorlu maç bulunamadı.\n\nSatır örneği:\nGalatasaray - Fenerbahce 2:1 2.10 3.40 3.20"); return; }
   kasaBas=parseFloat(document.getElementById('kasa').value)||1000;
   kasa=kasaBas; wi=0; toplamYat=0; gecmis=[];
-  seriMac=0; seriYat=0; seriZarar=0; sonSeri=null;
+  seriMac=0; seriYat=0; seriZarar=0; sonSeri=null; beraberliksiz=0;
   document.getElementById('setup').classList.add('hidden');
   document.getElementById('game').classList.remove('hidden');
   renderWeek(); renderHist(); saveState();
@@ -332,8 +342,11 @@ function renderRow(i){
     </div>`;
   };
   const skor = bitti ? `<span class="sc">${esc(m.sc)}</span>` : `<span class="sc q">? : ?</span>`;
+  const yatirilacak = m.stake.reduce((a,b)=>a+b,0);
   const kz = oynandi ? `<span class="pl ${net>=0?'pos':'neg'}">${money(net)}</span>`
-                     : (pas ? `<span class="pl sonuc">${m.r}</span>` : `<span class="pl zero">—</span>`);
+                     : (pas ? `<span class="pl sonuc">${m.r}</span>`
+                            : (yatirilacak>0 ? `<span class="pl yatir">${fmt(yatirilacak)} €<span class="ylbl">yatır</span></span>`
+                                             : `<span class="pl zero">—</span>`));
   const islem = bitti
     ? (pas ? `<span class="tag pass">PAS</span>`
            : `<span class="tag ${net>=0?'ok':'no'}">${net>=0?'KAZANDI':'KAYBETTİ'}</span>`)
@@ -343,11 +356,30 @@ function renderRow(i){
        </div>`;
 
   row.className='mrow'+(oynandi?(net>=0?' win':' loss'):(pas?' pass':''));
-  row.innerHTML=`<span class="teams">${esc(m.h)}${skor}${esc(m.a)}</span>
+  const bs = m.done ? (m.bsOnce||0) : beraberliksiz;
+  const bsCls = bs>=12 ? ' kirmizi' : (bs>=7 ? ' sari' : '');
+  const rozet = `<span class="xdry${bsCls}" title="Kaç maçtır beraberlik yok">${bs}</span>`;
+  row.innerHTML=`<span class="teams">${rozet}${esc(m.h)}${skor}${esc(m.a)}</span>
     ${cell(0)}${cell(1)}${cell(2)}
     ${kz}<span style="text-align:center">${islem}</span>`;
 }
 
+function guncelleSag(i){
+  const m=weeks[wi][i], row=document.getElementById('row'+i); if(!row) return;
+  const hedefMod=girisMod()==='hedef';
+  [0,1,2].forEach(k=>{
+    const inp=document.getElementById('st'+i+'_'+k); if(!inp||!inp.parentElement) return;
+    const alt=inp.parentElement.querySelector('.calc'); if(!alt) return;
+    alt.textContent = m.stake[k]>0
+      ? (hedefMod ? ('yatır '+fmt(m.stake[k])+' €') : ('kâr '+fmt(m.stake[k]*(m.od[k]-1))+' €'))
+      : ' ';
+  });
+  const tot=m.stake.reduce((a,b)=>a+b,0);
+  const sag=row.children[4];
+  if(sag && !m.done) sag.outerHTML = tot>0
+    ? `<span class="pl yatir">${fmt(tot)} €<span class="ylbl">yatır</span></span>`
+    : `<span class="pl zero">—</span>`;
+}
 function hedefleriTazele(){
   if(girisMod()!=='hedef') return;
   weeks[wi].forEach((m,i)=>{
@@ -357,7 +389,7 @@ function hedefleriTazele(){
     if(degisti) renderRow(i);
   });
 }
-function girisMod(){ const e=document.getElementById('girisMod'); return e?e.value:'mise'; }
+function girisMod(){ const e=document.getElementById('girisMod'); return e?e.value:'hedef'; }
 function modDegis(){ localStorage.setItem('pgMod',girisMod()); weeks[wi].forEach((m,i)=>renderRow(i)); saveState(); }
 
 // hedef mod: yazdığın kâr + açık seri zararını kapatacak yatırımı hesapla
@@ -375,19 +407,10 @@ function onStake(i,k,v){
     m.hedef=m.hedef||[0,0,0];
     m.hedef[k]=say;
     m.stake[k]= say>0 ? hedeftenMise(m,k,say) : 0;
-    const c=document.getElementById('st'+i+'_'+k);
-    if(c && c.parentElement){
-      const alt=c.parentElement.querySelector('.calc');
-      if(alt) alt.textContent = m.stake[k]>0 ? ('yatır '+fmt(m.stake[k])+' €') : ' ';
-    }
   } else {
     m.stake[k]=say;
-    const c=document.getElementById('st'+i+'_'+k);
-    if(c && c.parentElement){
-      const alt=c.parentElement.querySelector('.calc');
-      if(alt) alt.textContent = say>0 ? ('kâr '+fmt(say*(m.od[k]-1))+' €') : ' ';
-    }
   }
+  guncelleSag(i);
   saveState();
 }
 function quickFill(k){
@@ -411,6 +434,8 @@ function updateHud(){
   const e=document.getElementById('hKZ'); e.textContent=money(kz);
   e.className='v '+(kz>0?'pos':(kz<0?'neg':''));
   document.getElementById('hYat').textContent=fmt(toplamYat)+' €';
+  const hd=document.getElementById('hDry');
+  if(hd){ hd.textContent=beraberliksiz+' maç'; hd.className='v '+(beraberliksiz>=12?'neg':(beraberliksiz>=7?'':'acc')); }
   document.getElementById('hHafta').textContent=(etiketler[wi]? etiketler[wi].replace('Round ','R'):(wi+1))+' / '+weeks.length;
 }
 
@@ -425,6 +450,7 @@ function playMatch(i){
   const net = m.stake[idx]*m.od[idx] - bu;
   m.done='played'; m.net=net; m.bu=bu;
   kasa+=net; toplamYat+=bu;
+  xSayaciIsle(m);
 
   // --- açık seri takibi ---
   seriMac++; seriYat+=bu; seriZarar-=net;      // net eksiyse kapatılacak tutar büyür
@@ -434,13 +460,30 @@ function playMatch(i){
     seriMac=0; seriYat=0; seriZarar=0;
   } else sonSeri=null;
 
-  renderRow(i); hedefleriTazele(); updateWeekSum(); updateHud(); renderSeri(); checkWeekEnd(); saveState();
+  renderRow(i); hedefleriTazele(); tazeleXRozet(); updateWeekSum(); updateHud(); renderSeri(); checkWeekEnd(); saveState();
+}
+// mac acildiginda beraberlik kurakligi sayacini guncelle
+// oynanmamis satirlarin rozetini guncelle
+function tazeleXRozet(){
+  if(!weeks[wi]) return;
+  weeks[wi].forEach((m,i)=>{
+    if(m.done) return;
+    const row=document.getElementById('row'+i); if(!row) return;
+    const sp=row.querySelector('.xdry'); if(!sp) return;
+    sp.textContent=beraberliksiz;
+    sp.className='xdry'+(beraberliksiz>=12?' kirmizi':(beraberliksiz>=7?' sari':''));
+  });
+}
+function xSayaciIsle(m){
+  m.bsOnce = beraberliksiz;          // bu mactan ONCEKI durum (satirda gosterilecek)
+  if(m.r==='X') beraberliksiz=0; else beraberliksiz++;
 }
 function passMatch(i){
   const m=weeks[wi][i];
   if(m.done) return;
   m.done='pass'; m.net=0; m.bu=0; m.stake=[0,0,0];
-  renderRow(i); updateWeekSum(); updateHud(); checkWeekEnd(); saveState();
+  xSayaciIsle(m);
+  renderRow(i); tazeleXRozet(); updateWeekSum(); updateHud(); checkWeekEnd(); saveState();
 }
 
 // açık seri bandı — bir sonraki bahse karar verirken bakacağın yer
@@ -606,19 +649,19 @@ function resetGame(){
   localStorage.removeItem(LS);
   document.getElementById('game').classList.add('hidden');
   document.getElementById('setup').classList.remove('hidden');
-  weeks=[]; wi=0; gecmis=[]; etiketler=[]; seriMac=0; seriYat=0; seriZarar=0; sonSeri=null;
+  weeks=[]; wi=0; gecmis=[]; etiketler=[]; seriMac=0; seriYat=0; seriZarar=0; sonSeri=null; beraberliksiz=0;
 }
 
 /* --- ilerlemeyi kaydet (yenilemede kaybolmasın) --- */
 function saveState(){
-  try{ localStorage.setItem(LS, JSON.stringify({weeks,wi,kasa,kasaBas,toplamYat,gecmis,seriMac,seriYat,seriZarar,sonSeri,etiketler})); }catch(e){}
+  try{ localStorage.setItem(LS, JSON.stringify({weeks,wi,kasa,kasaBas,toplamYat,gecmis,seriMac,seriYat,seriZarar,sonSeri,etiketler,beraberliksiz})); }catch(e){}
 }
 function loadState(){
   try{
     const s=JSON.parse(localStorage.getItem(LS)||'null');
     if(!s||!s.weeks||!s.weeks.length) return false;
     ({weeks,wi,kasa,kasaBas,toplamYat,gecmis}=s);
-    etiketler=s.etiketler||[];
+    etiketler=s.etiketler||[]; beraberliksiz=s.beraberliksiz||0;
     seriMac=s.seriMac||0; seriYat=s.seriYat||0; seriZarar=s.seriZarar||0; sonSeri=s.sonSeri||null;
     document.getElementById('setup').classList.add('hidden');
     document.getElementById('game').classList.remove('hidden');
