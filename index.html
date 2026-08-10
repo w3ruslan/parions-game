@@ -246,7 +246,7 @@ function ultraClean(t){
 const RX=/^(?:.*?\d{2}:\d{2}\s+)?(.+?)\s+-\s+(.+?)\s+(\d{1,2}\s*:\s*\d{1,2})\s+(?:(\d{1,2})\s+)?(\d+\.\d+)\s+(\d+\.\d+)\s+(\d+\.\d+)/;
 
 // "Round 12", "Runde 3", "Journée 5", "Hafta 7", "Matchweek 2", "Week 4", "12. Round" gibi hafta işaretleri
-const ROUND_RX=/^\s*(?:(\d{1,2})\s*[.°)]?\s*)?(?:round|runde|rnd|journ[ée]e|jornada|giornata|matchweek|match\s*week|spieltag|hafta|week|kolejka|etapa)\s*[:.\-]?\s*(\d{1,2})?\s*$/i;
+const ROUND_RX=/^\s*(?:(\d{1,2})\s*[.°)]?\s*)?(?:round|runde|rnd|journ[ée]e|jornada|giornata|matchweek|match\s*week|spieltag|hafta|week|kolejka|etapa)\s*[:.\-]?\s*(\d{1,2})?\s*(?:[\s|]*1[\s|]+x[\s|]+2)?[\s|]*$/i;
 function roundNo(s){
   const m=s.match(ROUND_RX);
   if(!m) return null;
