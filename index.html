@@ -90,7 +90,18 @@
     font-family:ui-monospace,Menlo,monospace}
   .xdry.sari{background:rgba(245,185,66,.18);border-color:rgba(245,185,66,.6);color:var(--amber)}
   .xdry.kirmizi{background:rgba(255,107,107,.18);border-color:rgba(255,107,107,.6);color:var(--red)}
-  .teams{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+  .teams{min-width:0}
+  .tline{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+  .mstat{margin-top:3px;font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis;font-family:ui-monospace,Menlo,monospace;letter-spacing:-.2px}
+  .mstat b{color:var(--ink);font-weight:700}
+  .mstat.zayif{opacity:.45}
+  .mdeg{margin-left:7px;padding:1px 5px;border-radius:6px;background:var(--card2);
+    border:1px solid var(--line);font-weight:800}
+  .mdeg.iyi{background:rgba(46,204,113,.16);border-color:rgba(46,204,113,.55);color:var(--green)}
+  .mdeg.kotu{background:rgba(255,107,107,.14);border-color:rgba(255,107,107,.45);color:var(--red)}
+  .mzayif{margin-left:6px;font-style:italic}
+  #btnModel.on{border-color:var(--acc);color:var(--acc)}
   .sc{display:inline-block;background:var(--card2);border:1px solid var(--line);border-radius:6px;
     padding:0 6px;margin:0 6px;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;font-weight:700}
   .sc.q{color:var(--muted)}
@@ -188,6 +199,7 @@
           <button onclick="quickFill(1)">X</button>
           <button onclick="quickFill(2)">2</button>
           <button onclick="quickClear()">↺ temizle</button>
+          <button id="btnModel" onclick="modelToggle()" title="Gol beklentisi modelini goster/gizle">📊 Model</button>
         </span>
       </div>
 
@@ -321,6 +333,7 @@ function startGame(){
   kasa=kasaBas; wi=0; toplamYat=0; gecmis=[];
   seriMac=0; seriYat=0; seriZarar=0; sonSeri=null; beraberliksiz=0;
   undoStack=[]; sonMac=null; oncekiSonMac=null; kaydedildi=[]; localStorage.removeItem(UNDO_LS);
+  modelHesapla();
   document.getElementById('setup').classList.add('hidden');
   document.getElementById('game').classList.remove('hidden');
   renderWeek(); renderHist(); saveState();
@@ -335,6 +348,7 @@ function renderWeek(){
   updateWeekSum(); updateHud(); renderSeri(); checkWeekEnd();
   oncekiSonMac = sonMac ? {w:sonMac.w,i:sonMac.i} : null;
   undoBtnTazele();
+  const bm=document.getElementById('btnModel'); if(bm) bm.classList.toggle('on', modelAcik);
 }
 
 // tek maç satırı — durumuna göre çizilir
@@ -383,7 +397,16 @@ function renderRow(i){
   const bs = m.done ? (m.bsOnce||0) : beraberliksiz;
   const bsCls = bs>=12 ? ' kirmizi' : (bs>=7 ? ' sari' : '');
   const rozet = `<span class="xdry${bsCls}" title="Kaç maçtır beraberlik yok">${bs}</span>`;
-  row.innerHTML=`<span class="teams">${rozet}${esc(m.h)}${skor}${esc(m.a)}</span>
+  let mstat='';
+  if(modelAcik && m.mdl){
+    const d=m.mdl.deg*100;
+    const dc = d>=5 ? ' iyi' : (d<=-5 ? ' kotu' : '');
+    mstat=`<div class="mstat${m.mdl.guv?'':' zayif'}">`+
+          `T ${m.mdl.t.toFixed(2)} · F ${m.mdl.f.toFixed(2)} · adil X <b>${m.mdl.adil.toFixed(2)}</b>`+
+          `<span class="mdeg${dc}">${d>=0?'+':''}%${d.toFixed(0)}</span>`+
+          (m.mdl.guv?'':'<span class="mzayif">az veri</span>')+`</div>`;
+  }
+  row.innerHTML=`<span class="teams"><span class="tline">${rozet}${esc(m.h)}${skor}${esc(m.a)}</span>${mstat}</span>
     ${cell(0)}${cell(1)}${cell(2)}
     ${kz}<span style="text-align:center">${islem}</span>`;
 }
@@ -495,6 +518,50 @@ function playMatch(i){
 
   renderRow(i); hedefleriTazele(); tazeleXRozet(); updateWeekSum(); updateHud(); renderSeri(); checkWeekEnd(); saveState(); undoYaz(); undoBtnTazele(); sonMacTazele();
 }
+/* ---------- GOL BEKLENTISI MODELI (Poisson) ----------
+   Her mac icin, SADECE o macdan ONCEKI haftalarin verisiyle:
+   lam_ev / lam_dep -> T (toplam), F (fark), beraberlik ihtimali, adil X orani  */
+const MODEL_K=8, LIG_P=30, EV_PRIOR=1.50, DEP_PRIOR=1.15;
+let modelAcik = localStorage.getItem('pgModel')!=='0';
+function pois(l,k){ let r=Math.exp(-l); for(let i=1;i<=k;i++) r*=l/i; return r; }
+function beraberlikOl(lh,la){ let s=0; for(let k=0;k<=11;k++) s+=pois(lh,k)*pois(la,k); return s; }
+
+function modelHesapla(){
+  const T={}; const al=t=>T[t]||(T[t]={ea:0,ey:0,em:0,da:0,dy:0,dm:0});
+  let ligEa=0, ligDa=0, ligM=0;
+  weeks.forEach(w=>{
+    const evOrt =(ligEa+LIG_P*EV_PRIOR )/(ligM+LIG_P);
+    const depOrt=(ligDa+LIG_P*DEP_PRIOR)/(ligM+LIG_P);
+    const K=MODEL_K;
+    w.forEach(m=>{
+      const H=al(m.h), A=al(m.a);
+      const evHuc =((H.ea+K*evOrt )/(H.em+K))/evOrt;   // ev sahibinin evde hucumu
+      const evSav =((H.ey+K*depOrt)/(H.em+K))/depOrt;  // ev sahibinin evde savunmasi
+      const depHuc=((A.da+K*depOrt)/(A.dm+K))/depOrt;  // deplasmanin deplasmanda hucumu
+      const depSav=((A.dy+K*evOrt )/(A.dm+K))/evOrt;   // deplasmanin deplasmanda savunmasi
+      const lh=evOrt*evHuc*depSav, la=depOrt*depHuc*evSav;
+      const pr=beraberlikOl(lh,la);
+      m.mdl={ lh:lh, la:la, t:lh+la, f:Math.abs(lh-la), p:pr, adil:1/pr,
+              deg:pr*m.od[1]-1,
+              guv:(H.em+H.dm>=3 && A.em+A.dm>=3 && ligM>=20) };
+    });
+    w.forEach(m=>{                                  // haftayi gecmise ekle
+      const pp=String(m.sc).split(':'), hg=parseInt(pp[0]), ag=parseInt(pp[1]);
+      if(isNaN(hg)||isNaN(ag)) return;
+      const H=al(m.h), A=al(m.a);
+      H.ea+=hg; H.ey+=ag; H.em++;
+      A.da+=ag; A.dy+=hg; A.dm++;
+      ligEa+=hg; ligDa+=ag; ligM++;
+    });
+  });
+}
+function modelToggle(){
+  modelAcik=!modelAcik;
+  localStorage.setItem('pgModel', modelAcik?'1':'0');
+  document.getElementById('btnModel').classList.toggle('on', modelAcik);
+  renderWeek();
+}
+
 /* ---------- GERI ALMA ---------- */
 function anlikDurum(){
   return JSON.stringify({weeks,wi,kasa,toplamYat,gecmis,seriMac,seriYat,seriZarar,sonSeri,beraberliksiz,sonMac,kaydedildi});
@@ -741,6 +808,7 @@ function loadState(){
     seriMac=s.seriMac||0; seriYat=s.seriYat||0; seriZarar=s.seriZarar||0; sonSeri=s.sonSeri||null;
     sonMac=s.sonMac||null; kaydedildi=s.kaydedildi||[];
     try{ undoStack=JSON.parse(localStorage.getItem(UNDO_LS)||'[]')||[]; }catch(e){ undoStack=[]; }
+    modelHesapla();
     document.getElementById('setup').classList.add('hidden');
     document.getElementById('game').classList.remove('hidden');
     renderWeek(); renderHist();
