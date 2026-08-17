@@ -80,6 +80,9 @@
     border-bottom:1px solid var(--line)}
   .mrow{padding:8px 10px;border-bottom:1px solid rgba(42,53,80,.55);font-size:13px}
   .mrow.win{background:var(--green-bg)} .mrow.loss{background:var(--red-bg)} .mrow.none{opacity:.62}
+  .bsifir{padding:4px 8px;font-size:11px;border-radius:8px;background:var(--card2);
+    border:1px dashed var(--line);color:var(--muted);cursor:pointer;font-weight:700;white-space:nowrap}
+  .bsifir:hover{border-color:var(--red);color:var(--red);border-style:solid}
   .basr{padding:4px 8px;font-size:11px;border-radius:8px;background:var(--card2);border:1px solid var(--line);
     color:var(--muted);cursor:pointer;font-weight:700;white-space:nowrap}
   .basr:hover{border-color:var(--amber);color:var(--amber)}
@@ -401,6 +404,8 @@ function renderRow(i){
          <button class="bpass" onclick="passMatch(${i})">⊘ Pas geç</button>
          <button class="basr${m.asr?' on':''}" title="Sigorta: sürpriz tarafa, yatırdığını kurtaracak kadar"
            onclick="sigortaToggle(${i})">🛡 ${m.asr?'Sigorta açık':'Sigorta'}</button>
+         ${seriZarar>0.001 ? `<button class="bsifir" title="Biriken ${fmt(seriZarar)} € zararı kovalamayı bırak, temiz başla"
+           onclick="seriSifirla(${i})">↺ Seri sıfırla · ${fmt(seriZarar)} €</button>` : ''}
        </div>`;
 
   row.className='mrow'+(oynandi?(net>=0?' win':' loss'):(pas?' pass':''));
@@ -472,6 +477,23 @@ function hedeftenMise(m,k,hedef){
   const bol = m.od[k]-1;
   return bol>0 ? Math.round(pay/bol*100)/100 : 0;
 }
+/* ---------- SERIYI SIFIRLA ----------
+   Biriken zarari kovalamayi birakir. Kasaya DOKUNMAZ — zarar zaten yasandi.
+   Sadece 'hedef' modundaki hesaptan cikarilir, bundan sonrasi temiz baslar. */
+function seriSifirla(i){
+  if(seriZarar<=0.001 && seriMac===0){ return; }
+  const kapanan=seriZarar;
+  undoKaydet(`seri sifirlandi (${fmt(kapanan)} €)`);
+  seriMac=0; seriYat=0; seriZarar=0; sonSeri=null;
+  // hedef modundaki bahisleri yeni duruma gore yeniden hesapla
+  weeks[wi].forEach((m,j)=>{
+    if(m.done || !m.hedef) return;
+    [0,1,2].forEach(k=>{ if(m.hedef[k]>0) m.stake[k]=hedeftenMise(m,k,m.hedef[k]); });
+    if(m.asr) sigortaTazele(j);
+  });
+  renderWeek(); renderSeri(); updateHud(); saveState(); undoYaz(); undoBtnTazele();
+}
+
 /* ---------- SIGORTA (assurance) ----------
    Ana bahis X'e. Sigorta, SURPRIZ tarafa (favori olmayan 1 veya 2) oynanir.
    Miktar: surpriz gelirse yatirilan TOPLAM geri gelsin -> Su = Sx/(oran-1)   */
