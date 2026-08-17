@@ -65,7 +65,7 @@
   .quick button{padding:7px 12px;font-size:12px}
 
   /* MAÇ SATIRLARI */
-  .head-row,.mrow{display:grid;grid-template-columns:minmax(160px,1fr) 96px 96px 96px 86px 104px;gap:9px;align-items:center}
+  .head-row,.mrow{display:grid;grid-template-columns:minmax(150px,1fr) 92px 92px 92px 82px 132px;gap:9px;align-items:center}
   .acts{display:flex;flex-direction:column;gap:5px}
   .acts button{padding:7px 6px;font-size:11.5px;border-radius:9px}
   .bplay{background:var(--green);color:#052e16;border-color:var(--green)}
@@ -358,6 +358,7 @@ function renderWeek(){
   w.forEach((m,i)=>renderRow(i));
   updateWeekSum(); updateHud(); renderSeri(); checkWeekEnd();
   oncekiSonMac = sonMac ? {w:sonMac.w,i:sonMac.i} : null;
+  tazeleSifirDugmesi();
   undoBtnTazele();
   const bm=document.getElementById('btnModel'); if(bm) bm.classList.toggle('on', modelAcik);
 }
@@ -405,7 +406,7 @@ function renderRow(i){
          <button class="basr${m.asr?' on':''}" title="Sigorta: sürpriz tarafa, yatırdığını kurtaracak kadar"
            onclick="sigortaToggle(${i})">🛡 ${m.asr?'Sigorta açık':'Sigorta'}</button>
          ${seriZarar>0.001 ? `<button class="bsifir" title="Biriken ${fmt(seriZarar)} € zararı kovalamayı bırak, temiz başla"
-           onclick="seriSifirla(${i})">↺ Seri sıfırla · ${fmt(seriZarar)} €</button>` : ''}
+           onclick="seriSifirla(${i})">↺ Sıfırla ${fmt(seriZarar)} €</button>` : ''}
        </div>`;
 
   row.className='mrow'+(oynandi?(net>=0?' win':' loss'):(pas?' pass':''));
@@ -580,7 +581,7 @@ function playMatch(i){
     seriMac=0; seriYat=0; seriZarar=0;
   } else sonSeri=null;
 
-  renderRow(i); hedefleriTazele(); tazeleXRozet(); updateWeekSum(); updateHud(); renderSeri(); checkWeekEnd(); saveState(); undoYaz(); undoBtnTazele(); sonMacTazele();
+  renderRow(i); hedefleriTazele(); tazeleXRozet(); tazeleSifirDugmesi(); updateWeekSum(); updateHud(); renderSeri(); checkWeekEnd(); saveState(); undoYaz(); undoBtnTazele(); sonMacTazele();
 }
 /* ---------- GOL BEKLENTISI MODELI (Poisson) ----------
    Her mac icin, SADECE o macdan ONCEKI haftalarin verisiyle:
@@ -661,6 +662,27 @@ function undoBtnTazele(){
 }
 
 // mac acildiginda beraberlik kurakligi sayacini guncelle
+// oynanmamis butun satirlarda 'Seri sifirla' dugmesini olustur/guncelle/kaldir
+function tazeleSifirDugmesi(){
+  if(!weeks[wi]) return;
+  weeks[wi].forEach((m,i)=>{
+    if(m.done) return;
+    const row=document.getElementById('row'+i); if(!row) return;
+    const acts=row.querySelector('.acts'); if(!acts) return;
+    let b=acts.querySelector('.bsifir');
+    if(seriZarar>0.001){
+      if(!b){
+        b=document.createElement('button');
+        b.className='bsifir';
+        b.onclick=()=>seriSifirla(i);
+        acts.appendChild(b);
+      }
+      b.textContent='↺ Sıfırla '+fmt(seriZarar)+' €';
+      b.title='Biriken '+fmt(seriZarar)+' € zararı kovalamayı bırak, temiz başla';
+    } else if(b){ b.remove(); }
+  });
+}
+
 // oynanmamis satirlarin rozetini guncelle
 function tazeleXRozet(){
   if(!weeks[wi]) return;
@@ -683,7 +705,7 @@ function passMatch(i){
   sonMac={w:wi, i:i};
   m.done='pass'; m.net=0; m.bu=0; m.stake=[0,0,0];
   xSayaciIsle(m);
-  renderRow(i); tazeleXRozet(); updateWeekSum(); updateHud(); checkWeekEnd(); saveState(); undoYaz(); undoBtnTazele(); sonMacTazele();
+  renderRow(i); tazeleXRozet(); tazeleSifirDugmesi(); updateWeekSum(); updateHud(); checkWeekEnd(); saveState(); undoYaz(); undoBtnTazele(); sonMacTazele();
 }
 
 // açık seri bandı — bir sonraki bahse karar verirken bakacağın yer
