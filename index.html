@@ -80,6 +80,14 @@
     border-bottom:1px solid var(--line)}
   .mrow{padding:8px 10px;border-bottom:1px solid rgba(42,53,80,.55);font-size:13px}
   .mrow.win{background:var(--green-bg)} .mrow.loss{background:var(--red-bg)} .mrow.none{opacity:.62}
+  .basr{padding:4px 8px;font-size:11px;border-radius:8px;background:var(--card2);border:1px solid var(--line);
+    color:var(--muted);cursor:pointer;font-weight:700;white-space:nowrap}
+  .basr:hover{border-color:var(--amber);color:var(--amber)}
+  .basr.on{background:rgba(245,185,66,.18);border-color:rgba(245,185,66,.65);color:var(--amber)}
+  .asrline{margin-top:3px;font-size:10.5px;color:var(--amber);white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis;font-family:ui-monospace,Menlo,monospace}
+  .asrline.zayif{color:var(--muted);opacity:.7}
+  .asrline b{color:var(--ink)}
   .bundo{padding:3px 8px;font-size:12px;border-radius:8px;margin-left:6px;line-height:1;
     background:var(--card2);border:1px solid var(--line);color:var(--muted);cursor:pointer;vertical-align:middle}
   .bundo:hover{border-color:var(--amber);color:var(--amber)}
@@ -391,6 +399,8 @@ function renderRow(i){
     : `<div class="acts">
          <button class="bplay" onclick="playMatch(${i})">▶ Oyna</button>
          <button class="bpass" onclick="passMatch(${i})">⊘ Pas geç</button>
+         <button class="basr${m.asr?' on':''}" title="Sigorta: sürpriz tarafa, yatırdığını kurtaracak kadar"
+           onclick="sigortaToggle(${i})">🛡 ${m.asr?'Sigorta açık':'Sigorta'}</button>
        </div>`;
 
   row.className='mrow'+(oynandi?(net>=0?' win':' loss'):(pas?' pass':''));
@@ -406,7 +416,15 @@ function renderRow(i){
           `<span class="mdeg${dc}">${d>=0?'+':''}%${d.toFixed(0)}</span>`+
           (m.mdl.guv?'':'<span class="mzayif">az veri</span>')+`</div>`;
   }
-  row.innerHTML=`<span class="teams"><span class="tline">${rozet}${esc(m.h)}${skor}${esc(m.a)}</span>${mstat}</span>
+  let asrBilgi='';
+  if(m.asr && !m.done){
+    const su=surprizIdx(m), ana=m.stake[1]||0, sig=m.stake[su]||0;
+    asrBilgi = sig>0
+      ? `<div class="asrline">🛡 sürpriz <b>${['1','X','2'][su]}</b> @${m.od[su].toFixed(2)} → <b>${fmt(sig)} €</b>`+
+        ` · toplam ${fmt(ana+sig)} € · sürpriz gelirse başa baş</div>`
+      : `<div class="asrline zayif">🛡 sigorta açık — X'e tutar yaz</div>`;
+  }
+  row.innerHTML=`<span class="teams"><span class="tline">${rozet}${esc(m.h)}${skor}${esc(m.a)}</span>${mstat}${asrBilgi}</span>
     ${cell(0)}${cell(1)}${cell(2)}
     ${kz}<span style="text-align:center">${islem}</span>`;
 }
@@ -440,7 +458,7 @@ function hedefleriTazele(){
     if(m.done || !m.hedef) return;
     let degisti=false;
     [0,1,2].forEach(k=>{ if(m.hedef[k]>0){ const y=hedeftenMise(m,k,m.hedef[k]); if(y!==m.stake[k]){ m.stake[k]=y; degisti=true; } } });
-    if(degisti) renderRow(i);
+    if(degisti){ if(m.asr) sigortaTazele(i); renderRow(i); }
   });
 }
 function girisMod(){ const e=document.getElementById('girisMod'); return e?e.value:'hedef'; }
@@ -454,6 +472,28 @@ function hedeftenMise(m,k,hedef){
   const bol = m.od[k]-1;
   return bol>0 ? Math.round(pay/bol*100)/100 : 0;
 }
+/* ---------- SIGORTA (assurance) ----------
+   Ana bahis X'e. Sigorta, SURPRIZ tarafa (favori olmayan 1 veya 2) oynanir.
+   Miktar: surpriz gelirse yatirilan TOPLAM geri gelsin -> Su = Sx/(oran-1)   */
+function surprizIdx(m){ return m.od[0] > m.od[2] ? 0 : 2; }   // yuksek oran = surpriz
+function sigortaTazele(i){
+  const m=weeks[wi][i]; if(!m || m.done) return;
+  const su=surprizIdx(m);
+  if(!m.asr){ return; }
+  const ana=m.stake[1]||0;                       // X'e yatirilan
+  const bol=m.od[su]-1;
+  m.stake[su] = (ana>0 && bol>0) ? Math.round(ana/bol*100)/100 : 0;
+  if(m.hedef) m.hedef[su]=0;                     // sigorta hedef modunda da tutar olarak durur
+}
+function sigortaToggle(i){
+  const m=weeks[wi][i]; if(!m || m.done) return;
+  m.asr=!m.asr;
+  const su=surprizIdx(m);
+  if(m.asr) sigortaTazele(i);
+  else { m.stake[su]=0; if(m.hedef) m.hedef[su]=0; }
+  renderRow(i); updateWeekSum(); updateHud(); saveState();
+}
+
 function onStake(i,k,v){
   const m=weeks[wi][i]; if(m.done) return;
   const say=parseFloat(v)||0;
@@ -464,6 +504,7 @@ function onStake(i,k,v){
   } else {
     m.stake[k]=say;
   }
+  if(m.asr && k===1){ sigortaTazele(i); renderRow(i); updateWeekSum(); updateHud(); saveState(); return; }
   guncelleSag(i);
   saveState();
 }
@@ -472,12 +513,13 @@ function quickFill(k){
   weeks[wi].forEach((m,i)=>{ if(m.done) return;
     if(girisMod()==='hedef'){ m.hedef=m.hedef||[0,0,0]; m.hedef[k]=a; m.stake[k]= a>0 ? hedeftenMise(m,k,a) : 0; }
     else m.stake[k]=a;
+    if(m.asr) sigortaTazele(i);
     renderRow(i);
   });
   updateHud(); saveState();
 }
 function quickClear(){
-  weeks[wi].forEach((m,i)=>{ if(m.done) return; m.stake=[0,0,0]; m.hedef=[0,0,0]; renderRow(i); });
+  weeks[wi].forEach((m,i)=>{ if(m.done) return; m.stake=[0,0,0]; m.hedef=[0,0,0]; m.asr=false; renderRow(i); });
   updateHud(); saveState();
 }
 function haftaYatirim(){ return weeks[wi].reduce((s,m)=>s+m.stake.reduce((a,b)=>a+b,0),0); }
