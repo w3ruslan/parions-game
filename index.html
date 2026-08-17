@@ -96,6 +96,13 @@
   .bundo:hover{border-color:var(--amber);color:var(--amber)}
   #btnUndo:disabled,#btnPrev:disabled{opacity:.35;cursor:default}
   #btnUndo{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bpline{margin-top:3px}
+  .bp{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:800;
+    letter-spacing:.3px;border:1px solid var(--line);background:var(--card2);color:var(--muted)}
+  .bp.yuk{background:rgba(34,197,94,.20);border-color:rgba(34,197,94,.75);color:var(--green)}
+  .bp.iyi{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.45);color:var(--green)}
+  .bp.ort{background:rgba(245,185,66,.14);border-color:rgba(245,185,66,.5);color:var(--amber)}
+  .bp.dus{background:rgba(255,107,107,.10);border-color:rgba(255,107,107,.35);color:var(--red);opacity:.75}
   .rk{font-style:normal;font-size:9.5px;color:var(--muted);margin-left:3px;opacity:.85;
     font-family:ui-monospace,Menlo,monospace}
   .rakip{display:inline-block;margin-left:7px;padding:1px 6px;border-radius:20px;font-size:10px;
@@ -420,6 +427,9 @@ function renderRow(i){
   const bs = m.done ? (m.bsOnce||0) : beraberliksiz;
   const bsCls = bs>=12 ? ' kirmizi' : (bs>=7 ? ' sari' : '');
   const rozet = `<span class="xdry${bsCls}" title="Kaç maçtır beraberlik yok">${bs}</span>`;
+  const bp = beraberlikPuani(m);
+  const yildiz = bp.p>0 ? '★'.repeat(bp.p)+'☆'.repeat(4-bp.p) : '';
+  const bpRozet = `<span class="bp ${bp.k}" title="${esc(bp.nden)}">${yildiz} ${bp.ad}</span>`;
   let mstat='';
   if(modelAcik && m.mdl){
     const d=m.mdl.deg*100;
@@ -443,7 +453,8 @@ function renderRow(i){
     if(m.tbl.fark!==null && m.tbl.fark<=3)
       rakip=`<span class="rakip" title="Tabloda komşu takımlar — ${m.tbl.pfark} puan fark">⚔ ${m.tbl.fark}</span>`;
   }
-  row.innerHTML=`<span class="teams"><span class="tline">${rozet}${esc(m.h)}${sH}${skor}${esc(m.a)}${sA}${rakip}</span>${mstat}${asrBilgi}</span>
+  row.innerHTML=`<span class="teams"><span class="tline">${rozet}${esc(m.h)}${sH}${skor}${esc(m.a)}${sA}${rakip}</span>
+    <div class="bpline">${bpRozet}</div>${mstat}${asrBilgi}</span>
     ${cell(0)}${cell(1)}${cell(2)}
     ${kz}<span style="text-align:center">${islem}</span>`;
 }
@@ -600,7 +611,7 @@ function playMatch(i){
    Her mac icin, SADECE o macdan ONCEKI haftalarin verisiyle:
    lam_ev / lam_dep -> T (toplam), F (fark), beraberlik ihtimali, adil X orani  */
 const MODEL_K=8, LIG_P=30, EV_PRIOR=1.50, DEP_PRIOR=1.15;
-let modelAcik = localStorage.getItem('pgModel')!=='0';
+let modelAcik = localStorage.getItem('pgModel')==='1';
 let tabloAcik = localStorage.getItem('pgTablo')!=='0';
 function pois(l,k){ let r=Math.exp(-l); for(let i=1;i<=k;i++) r*=l/i; return r; }
 function beraberlikOl(lh,la){ let s=0; for(let k=0;k<=11;k++) s+=pois(lh,k)*pois(la,k); return s; }
@@ -654,6 +665,25 @@ function tabloToggle(){
   localStorage.setItem('pgTablo', tabloAcik?'1':'0');
   document.getElementById('btnTablo').classList.toggle('on', tabloAcik);
   renderWeek();
+}
+/* --- TEK BAKISTA: bu macta beraberlik ihtimali --- */
+function beraberlikPuani(m){
+  const ox=m.od[1];
+  // KANITLANMIS kural: 3.20-3.80 disi = dusuk (7.087 macta olculdu)
+  if(ox<3.20 || ox>3.80) return {p:0, ad:'DÜŞÜK', k:'dus',
+      nden:`X oranı ${ox.toFixed(2)} — 3.20-3.80 bandının dışında (7.087 maçta ölçüldü: bant dışı çok kaybettiriyor)`};
+  let p=2, n=[`X oranı ${ox.toFixed(2)} — iyi bantta`];
+  if(m.mdl && m.mdl.guv){
+    if(m.mdl.t<=2.60){ p++; n.push(`az gollü maç (beklenen ${m.mdl.t.toFixed(2)} gol)`); }
+    else n.push(`çok gollü maç (beklenen ${m.mdl.t.toFixed(2)} gol)`);
+    if(m.mdl.f<=0.60){ p++; n.push(`denk takımlar (fark ${m.mdl.f.toFixed(2)})`); }
+    else n.push(`dengesiz (fark ${m.mdl.f.toFixed(2)})`);
+  } else n.push('gol verisi yetersiz');
+  if(m.tbl && m.tbl.guv && m.tbl.fark!==null && m.tbl.fark<=3)
+    n.push(`tabloda komşu (#${m.tbl.hs} – #${m.tbl.as})`);
+  const ad = p>=4?'YÜKSEK' : (p===3?'İYİ' : 'ORTA');
+  const k  = p>=4?'yuk' : (p===3?'iyi' : 'ort');
+  return {p:p, ad:ad, k:k, nden:n.join(' · ')};
 }
 function modelToggle(){
   modelAcik=!modelAcik;
