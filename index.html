@@ -117,6 +117,12 @@
   .bundo:hover{border-color:var(--amber);color:var(--amber)}
   #btnUndo:disabled,#btnPrev:disabled{opacity:.35;cursor:default}
   #btnUndo{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tstat{display:flex;justify-content:space-between;gap:10px;margin-top:3px;font-size:10.5px;
+    color:var(--muted);font-family:ui-monospace,Menlo,monospace;white-space:nowrap;
+    overflow:hidden;letter-spacing:-.2px}
+  .tstat span{overflow:hidden;text-overflow:ellipsis}
+  .tstat i{font-style:normal;opacity:.6}
+  .tstat.zayif{opacity:.45}
   .bpline{margin-top:3px}
   .bp{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:800;
     letter-spacing:.3px;border:1px solid var(--line);background:var(--card2);color:var(--muted)}
@@ -478,9 +484,14 @@ function renderRow(i){
   const bs = m.done ? (m.bsOnce||0) : beraberliksiz;
   const bsCls = bs>=12 ? ' kirmizi' : (bs>=7 ? ' sari' : '');
   const rozet = `<span class="xdry${bsCls}" title="Kaç maçtır beraberlik yok">${bs}</span>`;
-  const bp = beraberlikPuani(m);
-  const yildiz = bp.p>0 ? '★'.repeat(bp.p)+'☆'.repeat(4-bp.p) : '';
-  const bpRozet = `<span class="bp ${bp.k}" title="${esc(bp.nden)}">${yildiz} ${bp.ad}</span>`;
+  let tstat='';
+  if(m.tbl && m.tbl.guv){
+    const ev =`#${m.tbl.hs} · ${m.tbl.hp}p · ${m.tbl.hAt}⚽${m.tbl.hYe} <i>(${m.tbl.hm} maç)</i>`;
+    const dep=`#${m.tbl.as} · ${m.tbl.ap}p · ${m.tbl.aAt}⚽${m.tbl.aYe} <i>(${m.tbl.am} maç)</i>`;
+    tstat=`<div class="tstat"><span>${ev}</span><span>${dep}</span></div>`;
+  } else {
+    tstat=`<div class="tstat zayif"><span>ilk maç — veri yok</span><span></span></div>`;
+  }
   let mstat='';
   if(modelAcik && m.mdl){
     const d=m.mdl.deg*100;
@@ -505,7 +516,7 @@ function renderRow(i){
       rakip=`<span class="rakip" title="Tabloda komşu takımlar — ${m.tbl.pfark} puan fark">⚔ ${m.tbl.fark}</span>`;
   }
   row.innerHTML=`<span class="teams"><span class="tline">${rozet}${esc(m.h)}${sH}${skor}${esc(m.a)}${sA}${rakip}</span>
-    <div class="bpline">${bpRozet}</div>${mstat}${asrBilgi}</span>
+    ${tstat}${mstat}${asrBilgi}</span>
     ${cell(0)}${cell(1)}${cell(2)}
     ${kz}<span style="text-align:center">${islem}</span>`;
 }
@@ -694,9 +705,11 @@ function modelHesapla(){
       const S=sira;
       const hs=S[m.h]||0, as=S[m.a]||0;
       m.tbl={ hs:hs, as:as, hp:H.pu, ap:A.pu, hm:H.om, am:A.om,
+              hAt:H.ea+H.da, hYe:H.ey+H.dy,      // ev sahibi: toplam attigi / yedigi
+              aAt:A.ea+A.da, aYe:A.ey+A.dy,      // deplasman: toplam attigi / yedigi
               fark:(hs&&as)?Math.abs(hs-as):null,
               pfark:Math.abs(H.pu-A.pu),
-              guv:(H.om>=4 && A.om>=4) };
+              guv:(H.om>=1 && A.om>=1) };
     });
     w.forEach(m=>{                                  // haftayi gecmise ekle
       const pp=String(m.sc).split(':'), hg=parseInt(pp[0]), ag=parseInt(pp[1]);
