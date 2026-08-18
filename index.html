@@ -11,10 +11,26 @@
     --green:#22c55e; --green-bg:rgba(34,197,94,.13);
     --red:#ff6b6b;  --red-bg:rgba(255,107,107,.11);
     --amber:#f5b942; --amber-bg:rgba(245,185,66,.14);
+    --parlama:rgba(109,134,240,.18);
   }
+  /* --- AÇIK TEMA --- */
+  html[data-tema="acik"]{
+    --bg:#f2f5fa; --card:#ffffff; --card2:#eaeef6; --line:#ccd5e4;
+    --ink:#141c30; --muted:#5a6a88; --accent:#3b52c9; --accent2:#2f43ad;
+    --green:#15803d; --green-bg:rgba(21,128,61,.13);
+    --red:#c81e1e;  --red-bg:rgba(200,30,30,.10);
+    --amber:#9a6200; --amber-bg:rgba(154,98,0,.15);
+    --parlama:rgba(59,82,201,.10);
+  }
+  html[data-tema="acik"] .bplay{color:#fff}
+  .temaBtn{position:fixed;top:14px;right:14px;z-index:9999;width:40px;height:40px;border-radius:50%;
+    border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:18px;cursor:pointer;
+    box-shadow:0 4px 16px rgba(0,0,0,.3);line-height:1;padding:0;display:flex;
+    align-items:center;justify-content:center}
+  .temaBtn:hover{border-color:var(--accent)}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   body{margin:0;padding:18px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-    background:radial-gradient(1100px 520px at 50% -220px,rgba(109,134,240,.18),transparent),var(--bg);
+    background:radial-gradient(1100px 520px at 50% -220px,var(--parlama),transparent),var(--bg);
     color:var(--ink);line-height:1.45}
   .wrap{max-width:1180px;margin:0 auto}
   header{text-align:center;margin-bottom:16px}
@@ -171,6 +187,7 @@
 </style>
 </head>
 <body>
+<button class="temaBtn" id="temaBtn" onclick="temaDegis()" title="Açık / koyu tema">🌙</button>
 <div class="wrap">
 
   <header>
@@ -262,6 +279,17 @@
 </div>
 
 <script>
+function temaUygula(t){
+  document.documentElement.setAttribute('data-tema', t);
+  const b=document.getElementById('temaBtn');
+  if(b) b.textContent = (t==='acik' ? '🌙' : '☀️');
+}
+function temaDegis(){
+  const yeni = document.documentElement.getAttribute('data-tema')==='acik' ? 'koyu' : 'acik';
+  localStorage.setItem('pgTema', yeni); temaUygula(yeni);
+}
+temaUygula(localStorage.getItem('pgTema') || 'koyu');
+
 const LS='parionsGame';
 let weeks=[], wi=0, kasa=0, kasaBas=0, toplamYat=0, gecmis=[], etiketler=[];
 let maclar=[];                       // butun haftalarin maclari, tek liste, sirali
