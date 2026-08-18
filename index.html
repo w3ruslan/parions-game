@@ -299,6 +299,23 @@ temaUygula(localStorage.getItem('pgTema') || 'koyu');
 const LS='parionsGame';
 let weeks=[], wi=0, kasa=0, kasaBas=0, toplamYat=0, gecmis=[], etiketler=[];
 let maclar=[];                       // butun haftalarin maclari, tek liste, sirali
+/* Haftalar yeniden eskiye mi dizili? Oyleyse duzelt.
+   Idempotent: ikinci kez cagrilinca hicbir sey yapmaz.
+   Kesintili numaralara (34,33,31) ve numarasiz basliklara dayanikli. */
+function sirayiDuzelt(){
+  if(!weeks || weeks.length<2) return false;
+  const no = etiketler.map(e=>{ const m=String(e||'').match(/(\d+)/); return m?parseInt(m[1]):null; });
+  let artan=0, azalan=0;
+  for(let i=1;i<no.length;i++){
+    if(no[i]==null || no[i-1]==null) continue;
+    if(no[i]>no[i-1]) artan++; else if(no[i]<no[i-1]) azalan++;
+  }
+  if(azalan<=artan) return false;              // zaten dogru sirada
+  weeks.reverse(); etiketler.reverse();
+  weeks.forEach(w=>w.reverse());               // hafta ICI de ters
+  return true;
+}
+
 function listeyiKur(){
   maclar=[];
   weeks.forEach((w,wIdx)=>w.forEach(m=>{ m.hafta=wIdx; m.etiket=etiketler[wIdx]||('Hafta '+(wIdx+1)); maclar.push(m); }));
@@ -364,10 +381,7 @@ function parseAll(raw, mode, per){
         const nolar=dolu.map(h=>h.no);
         const azalan = dolu.length>1 && nolar.every(n=>n>0)
                        && nolar.every((n,i)=>i===0 || n<nolar[i-1]);
-        if(azalan){
-          dolu.reverse();                       // haftalar: 8,7,6 -> 6,7,8
-          dolu.forEach(h=>h.maclar.reverse());  // hafta ICI de ters: kaynak yeniden eskiye dizer
-        }
+
         etiketler=dolu.map(h=>h.etiket); return dolu.map(h=>h.maclar);
       }
     }
@@ -403,6 +417,7 @@ function startGame(){
   kasa=kasaBas; wi=0; toplamYat=0; gecmis=[];
   seriMac=0; seriYat=0; seriZarar=0; sonSeri=null; beraberliksiz=0;
   undoStack=[]; sonMac=null; oncekiSonMac=null; kaydedildi=[]; localStorage.removeItem(UNDO_LS);
+  sirayiDuzelt();
   modelHesapla(); listeyiKur();
   document.getElementById('setup').classList.add('hidden');
   document.getElementById('game').classList.remove('hidden');
@@ -1051,6 +1066,7 @@ function loadState(){
     seriMac=s.seriMac||0; seriYat=s.seriYat||0; seriZarar=s.seriZarar||0; sonSeri=s.sonSeri||null;
     sonMac=s.sonMac||null; kaydedildi=s.kaydedildi||[];
     try{ undoStack=JSON.parse(localStorage.getItem(UNDO_LS)||'[]')||[]; }catch(e){ undoStack=[]; }
+    if(!weeks.some(w=>w.some(m=>m.done))) sirayiDuzelt();   // oynanmis oyunun sirasini bozma
     modelHesapla(); listeyiKur();
     document.getElementById('setup').classList.add('hidden');
     document.getElementById('game').classList.remove('hidden');
