@@ -80,6 +80,8 @@
   .head-row{padding:8px 10px;color:var(--muted);font-size:10.5px;font-weight:700;text-transform:uppercase;
     letter-spacing:.9px;background:var(--card2);border-top:1px solid var(--line);
     border-bottom:1px solid var(--line);border-radius:8px 8px 0 0;margin-bottom:2px}
+  .head-row.rh{margin-top:14px}
+  .head-row.rh:first-child{margin-top:0}
   .head-row .rt{font-size:11.5px;font-weight:800;letter-spacing:.9px;color:var(--ink)}
   .mrow{padding:8px 10px;border-bottom:1px solid rgba(42,53,80,.55);font-size:13px}
   .mrow.win{background:var(--green-bg)} .mrow.loss{background:var(--red-bg)} .mrow.none{opacity:.62}
@@ -208,7 +210,7 @@
       <div class="hstat"><div class="k">Toplam K/Z</div><div class="v" id="hKZ">—</div></div>
       <div class="hstat"><div class="k">Yatırılan</div><div class="v" id="hYat">—</div></div>
       <div class="hstat"><div class="k">Beraberliksiz</div><div class="v" id="hDry">—</div></div>
-      <div class="hstat"><div class="k">Hafta</div><div class="v" id="hHafta">—</div></div>
+      <div class="hstat"><div class="k">Maç</div><div class="v" id="hHafta">—</div></div>
     </div>
 
     <!-- AÇIK SERİ TAKİBİ -->
@@ -233,12 +235,6 @@
           <button id="btnTablo" onclick="tabloToggle()" title="Maç anındaki puan sıralamasını göster">⚔ Tablo</button>
         </span>
       </div>
-
-      <div class="head-row">
-        <span class="rt" id="headRound">ROUND</span>
-        <span style="text-align:center">1</span><span style="text-align:center">X</span>
-        <span style="text-align:center">2</span><span style="text-align:right">K/Z</span><span style="text-align:center">İşlem</span>
-      </div>
       <div id="matchList"></div>
 
       <div id="weekSum" class="weeksum hidden"></div>
@@ -247,7 +243,7 @@
       <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
         <button class="b-main hidden" id="btnNext" style="flex:2;min-width:200px" onclick="nextWeek()">Sonraki hafta →</button>
         <button id="btnUndo" style="flex:1;min-width:170px" onclick="geriAl()">↩ Geri al</button>
-        <button id="btnPrev" style="flex:1;min-width:150px" onclick="prevWeek()">← Önceki hafta</button>
+
         <button style="flex:1;min-width:150px" onclick="copyReport()">📋 Sonuçları kopyala</button>
         <button style="flex:1;min-width:120px" onclick="if(confirm('Oyun sıfırlansın mı?'))resetGame()">↺ Yeniden başla</button>
       </div>
@@ -268,6 +264,11 @@
 <script>
 const LS='parionsGame';
 let weeks=[], wi=0, kasa=0, kasaBas=0, toplamYat=0, gecmis=[], etiketler=[];
+let maclar=[];                       // butun haftalarin maclari, tek liste, sirali
+function listeyiKur(){
+  maclar=[];
+  weeks.forEach((w,wIdx)=>w.forEach(m=>{ m.hafta=wIdx; m.etiket=etiketler[wIdx]||('Hafta '+(wIdx+1)); maclar.push(m); }));
+}
 // açık seri: son kazançtan bu yana
 let seriMac=0, seriYat=0, seriZarar=0, sonSeri=null;
 // ligde kac mactir beraberlik yok
@@ -368,31 +369,40 @@ function startGame(){
   kasa=kasaBas; wi=0; toplamYat=0; gecmis=[];
   seriMac=0; seriYat=0; seriZarar=0; sonSeri=null; beraberliksiz=0;
   undoStack=[]; sonMac=null; oncekiSonMac=null; kaydedildi=[]; localStorage.removeItem(UNDO_LS);
-  modelHesapla();
+  modelHesapla(); listeyiKur();
   document.getElementById('setup').classList.add('hidden');
   document.getElementById('game').classList.remove('hidden');
   renderWeek(); renderHist(); saveState();
 }
 
 function renderWeek(){
-  const w=weeks[wi];
-  const et=etiketler[wi] || ('Hafta '+(wi+1));
-  document.getElementById('weekTitle').textContent=`${et}  ·  ${wi+1} / ${weeks.length}`;
-  const hr=document.getElementById('headRound');
-  if(hr){ const nn=String(et).match(/(\d+)/); hr.textContent = nn ? (nn[1]+'. ROUND') : et.toUpperCase(); }
-  document.getElementById('matchList').innerHTML=w.map((m,i)=>`<div class="mrow" id="row${i}"></div>`).join('');
-  w.forEach((m,i)=>renderRow(i));
-  updateWeekSum(); updateHud(); renderSeri(); checkWeekEnd();
+  if(!maclar.length) listeyiKur();
+  const kutu=document.getElementById('matchList');
+  let html='', sonEtiket=null;
+  maclar.forEach((m,i)=>{
+    if(m.etiket!==sonEtiket){
+      sonEtiket=m.etiket;
+      const nn=String(m.etiket).match(/(\d+)/);
+      html+=`<div class="head-row rh"><span class="rt">${nn?nn[1]+'. ROUND':esc(m.etiket)}</span>`+
+            `<span style="text-align:center">1</span><span style="text-align:center">X</span>`+
+            `<span style="text-align:center">2</span><span style="text-align:right">K/Z</span>`+
+            `<span style="text-align:center">İşlem</span></div>`;
+    }
+    html+=`<div class="mrow" id="row${i}"></div>`;
+  });
+  kutu.innerHTML=html;
+  maclar.forEach((m,i)=>renderRow(i));
+  document.getElementById('weekTitle').textContent=`${maclar.length} maç · ${weeks.length} hafta`;
+  updateWeekSum(); updateHud(); renderSeri();
   oncekiSonMac = sonMac ? {w:sonMac.w,i:sonMac.i} : null;
-  tazeleSifirDugmesi();
-  undoBtnTazele();
+  tazeleSifirDugmesi(); undoBtnTazele();
   const bm=document.getElementById('btnModel'); if(bm) bm.classList.toggle('on', modelAcik);
   const bt=document.getElementById('btnTablo'); if(bt) bt.classList.toggle('on', tabloAcik);
 }
 
 // tek maç satırı — durumuna göre çizilir
 function renderRow(i){
-  const m=weeks[wi][i], row=document.getElementById('row'+i);
+  const m=maclar[i], row=document.getElementById('row'+i);
   if(!row) return;
   const oynandi = m.done==='played', pas = m.done==='pass', bitti = !!m.done;
   const idx = m.r==='1'?0:(m.r==='X'?1:2);
@@ -474,13 +484,12 @@ function renderRow(i){
 
 let oncekiSonMac=null;
 function sonMacTazele(){
-  if(oncekiSonMac && oncekiSonMac.w===wi && weeks[wi] && weeks[wi][oncekiSonMac.i]
-     && !(sonMac && sonMac.w===wi && sonMac.i===oncekiSonMac.i)) renderRow(oncekiSonMac.i);
-  if(sonMac && sonMac.w===wi) renderRow(sonMac.i);
+  if(oncekiSonMac && maclar[oncekiSonMac.i] && !(sonMac && sonMac.i===oncekiSonMac.i)) renderRow(oncekiSonMac.i);
+  if(sonMac) renderRow(sonMac.i);
   oncekiSonMac = sonMac ? {w:sonMac.w, i:sonMac.i} : null;
 }
 function guncelleSag(i){
-  const m=weeks[wi][i], row=document.getElementById('row'+i); if(!row) return;
+  const m=maclar[i], row=document.getElementById('row'+i); if(!row) return;
   const hedefMod=girisMod()==='hedef';
   [0,1,2].forEach(k=>{
     const inp=document.getElementById('st'+i+'_'+k); if(!inp||!inp.parentElement) return;
@@ -497,7 +506,7 @@ function guncelleSag(i){
 }
 function hedefleriTazele(){
   if(girisMod()!=='hedef') return;
-  weeks[wi].forEach((m,i)=>{
+  maclar.forEach((m,i)=>{
     if(m.done || !m.hedef) return;
     let degisti=false;
     [0,1,2].forEach(k=>{ if(m.hedef[k]>0){ const y=hedeftenMise(m,k,m.hedef[k]); if(y!==m.stake[k]){ m.stake[k]=y; degisti=true; } } });
@@ -505,7 +514,7 @@ function hedefleriTazele(){
   });
 }
 function girisMod(){ const e=document.getElementById('girisMod'); return e?e.value:'hedef'; }
-function modDegis(){ localStorage.setItem('pgMod',girisMod()); weeks[wi].forEach((m,i)=>renderRow(i)); saveState(); }
+function modDegis(){ localStorage.setItem('pgMod',girisMod()); maclar.forEach((m,i)=>renderRow(i)); saveState(); }
 
 // hedef mod: yazdığın kâr + açık seri zararını kapatacak yatırımı hesapla
 // S x (oran-1) = hedef + seriZarar + ayni mactaki diger yatirimlar
@@ -524,7 +533,7 @@ function seriSifirla(i){
   undoKaydet(`seri sifirlandi (${fmt(kapanan)} €)`);
   seriMac=0; seriYat=0; seriZarar=0; sonSeri=null;
   // hedef modundaki bahisleri yeni duruma gore yeniden hesapla
-  weeks[wi].forEach((m,j)=>{
+  maclar.forEach((m,j)=>{
     if(m.done || !m.hedef) return;
     [0,1,2].forEach(k=>{ if(m.hedef[k]>0) m.stake[k]=hedeftenMise(m,k,m.hedef[k]); });
     if(m.asr) sigortaTazele(j);
@@ -537,7 +546,7 @@ function seriSifirla(i){
    Miktar: surpriz gelirse yatirilan TOPLAM geri gelsin -> Su = Sx/(oran-1)   */
 function surprizIdx(m){ return m.od[0] > m.od[2] ? 0 : 2; }   // yuksek oran = surpriz
 function sigortaTazele(i){
-  const m=weeks[wi][i]; if(!m || m.done) return;
+  const m=maclar[i]; if(!m || m.done) return;
   const su=surprizIdx(m);
   if(!m.asr){ return; }
   const ana=m.stake[1]||0;                       // X'e yatirilan
@@ -546,7 +555,7 @@ function sigortaTazele(i){
   if(m.hedef) m.hedef[su]=0;                     // sigorta hedef modunda da tutar olarak durur
 }
 function sigortaToggle(i){
-  const m=weeks[wi][i]; if(!m || m.done) return;
+  const m=maclar[i]; if(!m || m.done) return;
   m.asr=!m.asr;
   const su=surprizIdx(m);
   if(m.asr) sigortaTazele(i);
@@ -555,7 +564,7 @@ function sigortaToggle(i){
 }
 
 function onStake(i,k,v){
-  const m=weeks[wi][i]; if(m.done) return;
+  const m=maclar[i]; if(m.done) return;
   const say=parseFloat(v)||0;
   if(girisMod()==='hedef'){
     m.hedef=m.hedef||[0,0,0];
@@ -570,7 +579,7 @@ function onStake(i,k,v){
 }
 function quickFill(k){
   const a=parseFloat(document.getElementById('qAmount').value)||0;
-  weeks[wi].forEach((m,i)=>{ if(m.done) return;
+  maclar.forEach((m,i)=>{ if(m.done) return;
     if(girisMod()==='hedef'){ m.hedef=m.hedef||[0,0,0]; m.hedef[k]=a; m.stake[k]= a>0 ? hedeftenMise(m,k,a) : 0; }
     else m.stake[k]=a;
     if(m.asr) sigortaTazele(i);
@@ -579,10 +588,10 @@ function quickFill(k){
   updateHud(); saveState();
 }
 function quickClear(){
-  weeks[wi].forEach((m,i)=>{ if(m.done) return; m.stake=[0,0,0]; m.hedef=[0,0,0]; m.asr=false; renderRow(i); });
+  maclar.forEach((m,i)=>{ if(m.done) return; m.stake=[0,0,0]; m.hedef=[0,0,0]; m.asr=false; renderRow(i); });
   updateHud(); saveState();
 }
-function haftaYatirim(){ return weeks[wi].reduce((s,m)=>s+m.stake.reduce((a,b)=>a+b,0),0); }
+function haftaYatirim(){ return maclar.reduce((s,m)=>s+m.stake.reduce((a,b)=>a+b,0),0); }
 
 function updateHud(){
   document.getElementById('hKasa').textContent=fmt(kasa)+' €';
@@ -592,12 +601,12 @@ function updateHud(){
   document.getElementById('hYat').textContent=fmt(toplamYat)+' €';
   const hd=document.getElementById('hDry');
   if(hd){ hd.textContent=beraberliksiz+' maç'; hd.className='v '+(beraberliksiz>=12?'neg':(beraberliksiz>=7?'':'acc')); }
-  document.getElementById('hHafta').textContent=(etiketler[wi]? etiketler[wi].replace('Round ','R'):(wi+1))+' / '+weeks.length;
+  document.getElementById('hHafta').textContent=maclar.filter(m=>m.done).length+' / '+maclar.length;
 }
 
 // --- TEK MAÇ OYNA ---
 function playMatch(i){
-  const m=weeks[wi][i];
+  const m=maclar[i];
   if(m.done) return;
   const bu=m.stake.reduce((a,b)=>a+b,0);
   if(bu<=0){ passMatch(i); return; }                 // 0 yazdıysan = pas
@@ -724,6 +733,7 @@ function geriAl(){
   weeks=d.weeks; wi=d.wi; kasa=d.kasa; toplamYat=d.toplamYat; gecmis=d.gecmis;
   seriMac=d.seriMac; seriYat=d.seriYat; seriZarar=d.seriZarar; sonSeri=d.sonSeri;
   beraberliksiz=d.beraberliksiz; sonMac=d.sonMac||null; kaydedildi=d.kaydedildi||[];
+  listeyiKur();
   document.getElementById('matchList').style.textAlign='';
   document.getElementById('weekSum').classList.remove('hidden');
   renderWeek(); renderHist(); saveState(); undoYaz(); undoBtnTazele();
@@ -742,8 +752,8 @@ function undoBtnTazele(){
 // mac acildiginda beraberlik kurakligi sayacini guncelle
 // oynanmamis butun satirlarda 'Seri sifirla' dugmesini olustur/guncelle/kaldir
 function tazeleSifirDugmesi(){
-  if(!weeks[wi]) return;
-  weeks[wi].forEach((m,i)=>{
+  if(!maclar.length) return;
+  maclar.forEach((m,i)=>{
     if(m.done) return;
     const row=document.getElementById('row'+i); if(!row) return;
     const acts=row.querySelector('.acts'); if(!acts) return;
@@ -763,8 +773,8 @@ function tazeleSifirDugmesi(){
 
 // oynanmamis satirlarin rozetini guncelle
 function tazeleXRozet(){
-  if(!weeks[wi]) return;
-  weeks[wi].forEach((m,i)=>{
+  if(!maclar.length) return;
+  maclar.forEach((m,i)=>{
     if(m.done) return;
     const row=document.getElementById('row'+i); if(!row) return;
     const sp=row.querySelector('.xdry'); if(!sp) return;
@@ -777,7 +787,7 @@ function xSayaciIsle(m){
   if(m.r==='X') beraberliksiz=0; else beraberliksiz++;
 }
 function passMatch(i){
-  const m=weeks[wi][i];
+  const m=maclar[i];
   if(m.done) return;
   undoKaydet(`${kis(m.h)} – ${kis(m.a)} · pas`);
   sonMac={w:wi, i:i};
@@ -808,7 +818,7 @@ function renderSeri(){
 }
 
 function updateWeekSum(){
-  const w=weeks[wi];
+  const w=maclar;
   const oynanan=w.filter(m=>m.done==='played');
   const s=document.getElementById('weekSum');
   if(oynanan.length===0){ s.classList.add('hidden'); return; }
@@ -829,7 +839,14 @@ function updateWeekSum(){
 
 // hafta bitti mi? (tüm maçlar oynandı veya pas geçildi)
 function checkWeekEnd(){
-  const w=weeks[wi];
+  const btn=document.getElementById('btnNext');
+  if(btn){ btn.textContent='🏁 Oyunu bitir';
+           btn.classList.toggle('hidden', !maclar.some(m=>m.done)); }
+  undoBtnTazele();
+  return;
+}
+function checkWeekEnd_eski(){
+  const w=maclar;
   const bitti=w.every(m=>!!m.done);
   const btn=document.getElementById('btnNext');
   if(bitti){
@@ -845,11 +862,13 @@ function checkWeekEnd(){
 }
 
 function prevWeek(){
+  return;
   if(wi<=0) return;
   wi--; renderWeek(); saveState(); undoBtnTazele();
   window.scrollTo({top:0,behavior:'smooth'});
 }
 function nextWeek(){
+  undoKaydet('oyunu bitir'); undoYaz(); finish(); undoBtnTazele(); return;
   if(wi+1<weeks.length){ wi++; renderWeek(); saveState(); undoBtnTazele(); window.scrollTo({top:0,behavior:'smooth'}); }
   else { undoKaydet('oyunu bitir'); undoYaz(); finish(); undoBtnTazele(); }
 }
@@ -974,7 +993,7 @@ function resetGame(){
   localStorage.removeItem(LS);
   document.getElementById('game').classList.add('hidden');
   document.getElementById('setup').classList.remove('hidden');
-  weeks=[]; wi=0; gecmis=[]; etiketler=[]; seriMac=0; seriYat=0; seriZarar=0; sonSeri=null; beraberliksiz=0;
+  weeks=[]; maclar=[]; wi=0; gecmis=[]; etiketler=[]; seriMac=0; seriYat=0; seriZarar=0; sonSeri=null; beraberliksiz=0;
   undoStack=[]; sonMac=null; oncekiSonMac=null; kaydedildi=[]; localStorage.removeItem(UNDO_LS);
 }
 
@@ -991,7 +1010,7 @@ function loadState(){
     seriMac=s.seriMac||0; seriYat=s.seriYat||0; seriZarar=s.seriZarar||0; sonSeri=s.sonSeri||null;
     sonMac=s.sonMac||null; kaydedildi=s.kaydedildi||[];
     try{ undoStack=JSON.parse(localStorage.getItem(UNDO_LS)||'[]')||[]; }catch(e){ undoStack=[]; }
-    modelHesapla();
+    modelHesapla(); listeyiKur();
     document.getElementById('setup').classList.add('hidden');
     document.getElementById('game').classList.remove('hidden');
     renderWeek(); renderHist();
