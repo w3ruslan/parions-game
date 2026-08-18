@@ -329,7 +329,10 @@ function parseAll(raw, mode, per){
         const nolar=dolu.map(h=>h.no);
         const azalan = dolu.length>1 && nolar.every(n=>n>0)
                        && nolar.every((n,i)=>i===0 || n<nolar[i-1]);
-        if(azalan) dolu.reverse();
+        if(azalan){
+          dolu.reverse();                       // haftalar: 8,7,6 -> 6,7,8
+          dolu.forEach(h=>h.maclar.reverse());  // hafta ICI de ters: kaynak yeniden eskiye dizer
+        }
         etiketler=dolu.map(h=>h.etiket); return dolu.map(h=>h.maclar);
       }
     }
