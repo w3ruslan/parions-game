@@ -101,13 +101,15 @@
   .head-row .rt{font-size:11.5px;font-weight:800;letter-spacing:.9px;color:var(--ink)}
   .mrow{padding:8px 10px;border-bottom:1px solid rgba(42,53,80,.55);font-size:13px}
   .mrow.win{background:var(--green-bg)} .mrow.loss{background:var(--red-bg)} .mrow.none{opacity:.62}
-  .bsifir{padding:4px 8px;font-size:11px;border-radius:8px;background:var(--card2);
+  .bsifirYOK{padding:4px 8px;font-size:11px;border-radius:8px;background:var(--card2);
     border:1px dashed var(--line);color:var(--muted);cursor:pointer;font-weight:700;white-space:nowrap}
   .bsifir:hover{border-color:var(--red);color:var(--red);border-style:solid}
-  .basr{padding:4px 8px;font-size:11px;border-radius:8px;background:var(--card2);border:1px solid var(--line);
+  .bstop{padding:4px 8px;font-size:11px;border-radius:8px;background:var(--card2);border:1px solid var(--line);
     color:var(--muted);cursor:pointer;font-weight:700;white-space:nowrap}
-  .basr:hover{border-color:var(--amber);color:var(--amber)}
-  .basr.on{background:rgba(245,185,66,.18);border-color:rgba(245,185,66,.65);color:var(--amber)}
+  .bstop.aktif{background:rgba(240,90,90,.16);border-color:rgba(240,90,90,.6);color:var(--red);font-weight:700}
+  .bstop.aktif:hover{background:rgba(240,90,90,.30)}
+  .bstop.pasif{opacity:.4;cursor:default}
+  .serisay{font-size:10px;color:var(--muted);margin-left:2px}
   .asrline{margin-top:3px;font-size:10.5px;color:var(--amber);white-space:nowrap;overflow:hidden;
     text-overflow:ellipsis;font-family:ui-monospace,Menlo,monospace}
   .asrline.zayif{color:var(--muted);opacity:.7}
@@ -323,6 +325,7 @@ function listeyiKur(){
 }
 // açık seri: son kazançtan bu yana
 let seriMac=0, seriYat=0, seriZarar=0, sonSeri=null;
+let stopToplam=0, stopAdet=0;   // STOP ile kayba yazilan toplam
 // ligde kac mactir beraberlik yok
 let beraberliksiz=0;
 // geri alma yigini + son islem yapilan mac
@@ -416,7 +419,7 @@ function startGame(){
   if(weeks.length===0){ alert("Skorlu maç bulunamadı.\n\nSatır örneği:\nGalatasaray - Fenerbahce 2:1 2.10 3.40 3.20"); return; }
   kasaBas=parseFloat(document.getElementById('kasa').value)||1000;
   kasa=kasaBas; wi=0; toplamYat=0; gecmis=[];
-  seriMac=0; seriYat=0; seriZarar=0; sonSeri=null; beraberliksiz=0;
+  seriMac=0; seriYat=0; seriZarar=0; sonSeri=null; stopToplam=0; stopAdet=0; beraberliksiz=0;
   undoStack=[]; sonMac=null; oncekiSonMac=null; kaydedildi=[]; localStorage.removeItem(UNDO_LS);
   sirayiDuzelt();
   modelHesapla(); listeyiKur();
@@ -490,10 +493,9 @@ function renderRow(i){
     : `<div class="acts">
          <button class="bplay" onclick="playMatch(${i})">▶ Oyna</button>
          <button class="bpass" onclick="passMatch(${i})">⊘ Pas</button>
-         <button class="basr${m.asr?' on':''}" title="Sigorta: sürpriz tarafa, yatırdığını kurtaracak kadar"
-           onclick="sigortaToggle(${i})">🛡${m.asr?' açık':''}</button>
-         ${seriZarar>0.001 ? `<button class="bsifir" title="Biriken ${fmt(seriZarar)} € zararı kovalamayı bırak, temiz başla"
-           onclick="seriSifirla(${i})">↺ ${fmt(seriZarar)}€</button>` : ''}
+         <button class="bstop ${seriZarar>0.001?'aktif':'pasif'}"
+           title="${seriZarar>0.001 ? 'Biriken '+fmt(seriZarar)+' € zararı kayba yaz, seriyi kapat, sıfırdan başla' : 'Seride biriken zarar yok'}"
+           onclick="stopLoss(${i})">⛔ ${fmt(seriZarar)}€<span class="serisay">${seriMac}/4</span></button>
        </div>`;
 
   row.className='mrow'+(oynandi?(net>=0?' win':' loss'):(pas?' pass':''));
@@ -532,7 +534,7 @@ function renderRow(i){
       rakip=`<span class="rakip" title="Tabloda komşu takımlar — ${m.tbl.pfark} puan fark">⚔ ${m.tbl.fark}</span>`;
   }
   row.innerHTML=`<span class="teams"><span class="tline">${rozet}${esc(m.h)}${sH}${skor}${esc(m.a)}${sA}${rakip}</span>
-    ${tstat}${mstat}${asrBilgi}</span>
+    ${tstat}${mstat}</span>
     ${cell(0)}${cell(1)}${cell(2)}
     ${kz}<span style="text-align:center">${islem}</span>`;
 }
@@ -582,10 +584,12 @@ function hedeftenMise(m,k,hedef){
 /* ---------- SERIYI SIFIRLA ----------
    Biriken zarari kovalamayi birakir. Kasaya DOKUNMAZ — zarar zaten yasandi.
    Sadece 'hedef' modundaki hesaptan cikarilir, bundan sonrasi temiz baslar. */
-function seriSifirla(i){
+function stopLoss(i){
   if(seriZarar<=0.001 && seriMac===0){ return; }
   const kapanan=seriZarar;
-  undoKaydet(`seri sifirlandi (${fmt(kapanan)} €)`);
+  if(!confirm(`STOP: ${fmt(kapanan)} € zarar kayba yazılacak.\nSeri kapanır, bir sonraki bahis sıfırdan +hedef için hesaplanır.\n\nOnaylıyor musun?`)) return;
+  undoKaydet(`stop-loss (${fmt(kapanan)} €)`);
+  stopToplam += kapanan; stopAdet++;
   seriMac=0; seriYat=0; seriZarar=0; sonSeri=null;
   // hedef modundaki bahisleri yeni duruma gore yeniden hesapla
   maclar.forEach((m,j)=>{
@@ -773,7 +777,7 @@ function modelToggle(){
 
 /* ---------- GERI ALMA ---------- */
 function anlikDurum(){
-  return JSON.stringify({weeks,wi,kasa,toplamYat,gecmis,seriMac,seriYat,seriZarar,sonSeri,beraberliksiz,sonMac,kaydedildi});
+  return JSON.stringify({weeks,wi,kasa,toplamYat,gecmis,seriMac,seriYat,seriZarar,sonSeri,stopToplam,stopAdet,beraberliksiz,sonMac,kaydedildi});
 }
 function undoKaydet(etiket){
   undoStack.push({s:anlikDurum(), t:etiket});
@@ -789,6 +793,7 @@ function geriAl(){
   const d=JSON.parse(u.s);
   weeks=d.weeks; wi=d.wi; kasa=d.kasa; toplamYat=d.toplamYat; gecmis=d.gecmis;
   seriMac=d.seriMac; seriYat=d.seriYat; seriZarar=d.seriZarar; sonSeri=d.sonSeri;
+  stopToplam=d.stopToplam||0; stopAdet=d.stopAdet||0;
   beraberliksiz=d.beraberliksiz; sonMac=d.sonMac||null; kaydedildi=d.kaydedildi||[];
   listeyiKur();
   document.getElementById('matchList').style.textAlign='';
@@ -810,21 +815,21 @@ function undoBtnTazele(){
 // oynanmamis butun satirlarda 'Seri sifirla' dugmesini olustur/guncelle/kaldir
 function tazeleSifirDugmesi(){
   if(!maclar.length) return;
+  const var_=seriZarar>0.001;
   maclar.forEach((m,i)=>{
     if(m.done) return;
     const row=document.getElementById('row'+i); if(!row) return;
     const acts=row.querySelector('.acts'); if(!acts) return;
-    let b=acts.querySelector('.bsifir');
-    if(seriZarar>0.001){
-      if(!b){
-        b=document.createElement('button');
-        b.className='bsifir';
-        b.onclick=()=>seriSifirla(i);
-        acts.appendChild(b);
-      }
-      b.textContent='↺ '+fmt(seriZarar)+'€';
-      b.title='Biriken '+fmt(seriZarar)+' € zararı kovalamayı bırak, temiz başla';
-    } else if(b){ b.remove(); }
+    let b=acts.querySelector('.bstop');
+    if(!b){                                  // STOP dugmesi HER ZAMAN durur
+      b=document.createElement('button');
+      b.onclick=()=>stopLoss(i);
+      acts.appendChild(b);
+    }
+    b.className='bstop '+(var_?'aktif':'pasif');
+    b.innerHTML='⛔ '+fmt(seriZarar)+'€<span class="serisay">'+seriMac+'/4</span>';
+    b.title = var_ ? 'Biriken '+fmt(seriZarar)+' € zararı kayba yaz, seriyi kapat, sıfırdan başla'
+                   : 'Seride biriken zarar yok';
   });
 }
 
@@ -859,10 +864,11 @@ function renderSeri(){
   if(seriMac>0){
     el.className='seribar acik';
     el.innerHTML=`<span class="stitle">🔁 Açık seri</span>
-      <div class="sb"><span class="sk">Kazanamadığın maç</span><span class="sv amber">${seriMac}</span></div>
+      <div class="sb"><span class="sk">Kazanamadığın maç</span><span class="sv ${seriMac>=4?'red':'amber'}">${seriMac} / 4${seriMac>=4?' — STOP!':''}</span></div>
       <div class="sb"><span class="sk">Bu seride yatırdığın</span><span class="sv amber">${fmt(seriYat)} €</span></div>
       <div class="sb"><span class="sk">Kapatılacak</span><span class="sv red">${fmt(seriZarar)} €</span></div>
-      <div class="sb"><span class="sk">3.00 oranla kapatmak için</span><span class="sv">≈ ${fmt(seriZarar/2)} € mise</span></div>`;
+      <div class="sb"><span class="sk">3.00 oranla kapatmak için</span><span class="sv">≈ ${fmt(seriZarar/2)} € mise</span></div>
+      ${stopAdet?`<div class="sb"><span class="sk">Şimdiye kadar STOP'la yazılan</span><span class="sv red">${fmt(stopToplam)} € (${stopAdet} kez)</span></div>`:''}`;
     el.classList.remove('hidden');
   } else if(sonSeri){
     el.className='seribar kapali';
@@ -1050,13 +1056,13 @@ function resetGame(){
   localStorage.removeItem(LS);
   document.getElementById('game').classList.add('hidden');
   document.getElementById('setup').classList.remove('hidden');
-  weeks=[]; maclar=[]; wi=0; gecmis=[]; etiketler=[]; seriMac=0; seriYat=0; seriZarar=0; sonSeri=null; beraberliksiz=0;
+  weeks=[]; maclar=[]; wi=0; gecmis=[]; etiketler=[]; seriMac=0; seriYat=0; seriZarar=0; sonSeri=null; stopToplam=0; stopAdet=0; beraberliksiz=0;
   undoStack=[]; sonMac=null; oncekiSonMac=null; kaydedildi=[]; localStorage.removeItem(UNDO_LS);
 }
 
 /* --- ilerlemeyi kaydet (yenilemede kaybolmasın) --- */
 function saveState(){
-  try{ localStorage.setItem(LS, JSON.stringify({weeks,wi,kasa,kasaBas,toplamYat,gecmis,seriMac,seriYat,seriZarar,sonSeri,etiketler,beraberliksiz,sonMac,kaydedildi})); }catch(e){}
+  try{ localStorage.setItem(LS, JSON.stringify({weeks,wi,kasa,kasaBas,toplamYat,gecmis,seriMac,seriYat,seriZarar,sonSeri,stopToplam,stopAdet,etiketler,beraberliksiz,sonMac,kaydedildi})); }catch(e){}
 }
 function loadState(){
   try{
@@ -1065,6 +1071,7 @@ function loadState(){
     ({weeks,wi,kasa,kasaBas,toplamYat,gecmis}=s);
     etiketler=s.etiketler||[]; beraberliksiz=s.beraberliksiz||0;
     seriMac=s.seriMac||0; seriYat=s.seriYat||0; seriZarar=s.seriZarar||0; sonSeri=s.sonSeri||null;
+    stopToplam=s.stopToplam||0; stopAdet=s.stopAdet||0;
     sonMac=s.sonMac||null; kaydedildi=s.kaydedildi||[];
     try{ undoStack=JSON.parse(localStorage.getItem(UNDO_LS)||'[]')||[]; }catch(e){ undoStack=[]; }
     if(!weeks.some(w=>w.some(m=>m.done))) sirayiDuzelt();   // oynanmis oyunun sirasini bozma
