@@ -65,8 +65,9 @@
   .quick button{padding:7px 12px;font-size:12px}
 
   /* MAÇ SATIRLARI */
-  .head-row,.mrow{display:grid;grid-template-columns:minmax(150px,1fr) 92px 92px 92px 82px 132px;gap:9px;align-items:center}
-  .acts{display:flex;flex-direction:column;gap:5px}
+  .head-row,.mrow{display:grid;grid-template-columns:minmax(150px,1fr) 118px 118px 118px 76px 232px;gap:8px;align-items:center}
+  .acts{display:flex;flex-direction:row;flex-wrap:wrap;gap:4px;justify-content:flex-end}
+  .acts button{flex:0 0 auto}
   .acts button{padding:7px 6px;font-size:11.5px;border-radius:9px}
   .bplay{background:var(--green);color:#052e16;border-color:var(--green)}
   .bplay:hover{background:#16a34a;border-color:#16a34a}
@@ -131,10 +132,14 @@
     padding:0 6px;margin:0 6px;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;font-weight:700}
   .sc.q{color:var(--muted)}
 
-  .cellbox{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:5px 6px;text-align:center}
-  .cellbox .od{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--muted);margin-bottom:3px}
-  .cellbox input{padding:6px 4px;font-size:13px;text-align:center;font-weight:700}
-  .cellbox .calc{font-size:9.5px;color:var(--amber);font-weight:700;margin-top:2px;min-height:12px;white-space:nowrap}
+  .cellbox{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:5px 7px;
+    display:grid;grid-template-columns:auto 1fr;grid-template-areas:"od inp" "calc calc";
+    gap:2px 7px;align-items:center}
+  .cellbox .od{grid-area:od;font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--muted);
+    font-weight:700;white-space:nowrap}
+  .cellbox input{grid-area:inp;padding:5px 4px;font-size:13px;text-align:center;font-weight:700;min-width:0}
+  .cellbox .calc{grid-area:calc;font-size:9.5px;color:var(--amber);font-weight:700;
+    min-height:11px;white-space:nowrap;text-align:center;overflow:hidden;text-overflow:ellipsis}
   .cellbox.hit{border-color:var(--green);background:rgba(34,197,94,.16)}
   .cellbox.hit .od{color:var(--green);font-weight:700}
   .cellbox.miss{opacity:.45}
@@ -421,11 +426,11 @@ function renderRow(i){
            : `<span class="tag ${net>=0?'ok':'no'}">${net>=0?'KAZANDI':'KAYBETTİ'}</span>${geriBtn}`)
     : `<div class="acts">
          <button class="bplay" onclick="playMatch(${i})">▶ Oyna</button>
-         <button class="bpass" onclick="passMatch(${i})">⊘ Pas geç</button>
+         <button class="bpass" onclick="passMatch(${i})">⊘ Pas</button>
          <button class="basr${m.asr?' on':''}" title="Sigorta: sürpriz tarafa, yatırdığını kurtaracak kadar"
-           onclick="sigortaToggle(${i})">🛡 ${m.asr?'Sigorta açık':'Sigorta'}</button>
+           onclick="sigortaToggle(${i})">🛡${m.asr?' açık':''}</button>
          ${seriZarar>0.001 ? `<button class="bsifir" title="Biriken ${fmt(seriZarar)} € zararı kovalamayı bırak, temiz başla"
-           onclick="seriSifirla(${i})">↺ Sıfırla ${fmt(seriZarar)} €</button>` : ''}
+           onclick="seriSifirla(${i})">↺ ${fmt(seriZarar)}€</button>` : ''}
        </div>`;
 
   row.className='mrow'+(oynandi?(net>=0?' win':' loss'):(pas?' pass':''));
@@ -747,7 +752,7 @@ function tazeleSifirDugmesi(){
         b.onclick=()=>seriSifirla(i);
         acts.appendChild(b);
       }
-      b.textContent='↺ Sıfırla '+fmt(seriZarar)+' €';
+      b.textContent='↺ '+fmt(seriZarar)+'€';
       b.title='Biriken '+fmt(seriZarar)+' € zararı kovalamayı bırak, temiz başla';
     } else if(b){ b.remove(); }
   });
