@@ -475,7 +475,8 @@ function renderRow(i){
     return `<div class="${cls}">
       <div class="od">${m.od[k].toFixed(2)}</div>
       <input type="number" id="st${i}_${k}" min="0" step="1" placeholder="${hedefMod?'kâr €':'€'}"
-        value="${deger}" ${bitti?'disabled':''} oninput="onStake(${i},${k},this.value)">
+        value="${deger}" ${bitti?'disabled':''} oninput="onStake(${i},${k},this.value)"
+        onkeydown="stakeEnter(event,${i})">
       ${alt}
     </div>`;
   };
@@ -622,6 +623,33 @@ function sigortaToggle(i){
   renderRow(i); updateWeekSum(); updateHud(); saveState();
 }
 
+
+/* ---------- ENTER = OYNA ----------
+   Kutuya rakam yazip Enter'a basinca o mac oynanir, imlec siradaki
+   oynanmamis macin X kutusuna atlar. Bos kutuda Enter hicbir sey yapmaz. */
+function stakeEnter(ev,i){
+  if(ev.key!=='Enter' && ev.keyCode!==13) return;
+  ev.preventDefault();
+  const m=maclar[i];
+  if(!m || m.done) return;
+  const toplam=(m.stake||[0,0,0]).reduce((a,b)=>a+(parseFloat(b)||0),0);
+  if(toplam<=0.001){ return; }          // bos: kazara Enter'da bir sey olmasin
+  try{ ev.target.blur(); }catch(e){}
+  playMatch(i);
+  siradakiKutuyaGec(i);
+}
+function siradakiKutuyaGec(i){
+  for(let j=i+1;j<maclar.length;j++){
+    if(maclar[j].done) continue;
+    const el=document.getElementById('st'+j+'_1');   // siradaki macin X kutusu
+    if(el && !el.disabled){
+      el.focus();
+      try{ el.select(); }catch(e){}
+      try{ el.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){}
+    }
+    return;
+  }
+}
 function onStake(i,k,v){
   const m=maclar[i]; if(m.done) return;
   const say=parseFloat(v)||0;
